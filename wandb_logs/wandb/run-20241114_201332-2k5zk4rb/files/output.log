@@ -1,0 +1,29 @@
+Loaded 4000 images from jk_zfls/round0_train
+Epoch: 0, Batch: 0, Loss: 3.1218
+Epoch 0: Loss = 0.8995, Accuracy = 75.05%
+Epoch: 1, Batch: 0, Loss: 0.1425
+Epoch 1: Loss = 0.1096, Accuracy = 97.25%
+Epoch: 2, Batch: 0, Loss: 0.1074
+Epoch 2: Loss = 0.0608, Accuracy = 98.47%
+Epoch: 3, Batch: 0, Loss: 0.0640
+Epoch 3: Loss = 0.0247, Accuracy = 99.62%
+Epoch: 4, Batch: 0, Loss: 0.0060
+Epoch 4: Loss = 0.0354, Accuracy = 99.30%
+Epoch: 5, Batch: 0, Loss: 0.0128
+Epoch 5: Loss = 0.0219, Accuracy = 99.55%
+Epoch: 6, Batch: 0, Loss: 0.0058
+Epoch 6: Loss = 0.0061, Accuracy = 99.90%
+Epoch: 7, Batch: 0, Loss: 0.0596
+Epoch 7: Loss = 0.0162, Accuracy = 99.67%
+Epoch: 8, Batch: 0, Loss: 0.0164
+Epoch 8: Loss = 0.0252, Accuracy = 99.50%
+Epoch: 9, Batch: 0, Loss: 0.0051
+Epoch 9: Loss = 0.0124, Accuracy = 99.65%
+Epoch: 10, Batch: 0, Loss: 0.0037
+Epoch 10: Loss = 0.0103, Accuracy = 99.80%
+Epoch: 11, Batch: 0, Loss: 0.0012
+Epoch 11: Loss = 0.0021, Accuracy = 100.00%
+Epoch: 12, Batch: 0, Loss: 0.0011
+Epoch 12: Loss = 0.0014, Accuracy = 100.00%
+Epoch: 13, Batch: 0, Loss: 0.0012
+Epoch 13: Loss = 0.0011, Accuracy = 100.00%

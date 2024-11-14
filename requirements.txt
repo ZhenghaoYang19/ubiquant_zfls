@@ -1,0 +1,8 @@
+Cython==3.0.11
+libmr==0.1.9
+mkl-service==2.4.0
+mkl_fft @ file:///C:/Users/dev-admin/mkl/mkl_fft_1730824198951/work
+mkl_random @ file:///C:/Users/dev-admin/mkl/mkl_random_1730824302834/work
+numpy @ file:///C:/b/abs_25aj347ekn/croot/numpy_and_numpy_base_1730835595898/work/dist/numpy-2.1.3-cp313-cp313-win_amd64.whl#sha256=17b3f31ca0015b3dd2f7d7078af5b282907dcd54522d8ba9dbb868e6a654f320
+setuptools==72.1.0
+wheel==0.44.0

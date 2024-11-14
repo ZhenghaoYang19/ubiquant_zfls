@@ -1,0 +1,98 @@
+Loaded 4000 images from jk_zfls/round0_train
+Loaded 2400 images from jk_zfls/round0_eval
+Epoch: 0, Batch: 0, Loss: 3.0488
+Epoch 0:
+Train Loss = 0.9623, Train Accuracy = 72.28%
+Val Loss = 6.0092, Val Accuracy = 24.05%
+Epoch: 1, Batch: 0, Loss: 0.1553
+Epoch 1:
+Train Loss = 0.1238, Train Accuracy = 96.72%
+Val Loss = 0.9766, Val Accuracy = 63.20%
+Epoch: 2, Batch: 0, Loss: 0.0424
+Epoch 2:
+Train Loss = 0.0405, Train Accuracy = 99.22%
+Val Loss = 0.7387, Val Accuracy = 71.25%
+Epoch: 3, Batch: 0, Loss: 0.0254
+Epoch 3:
+Train Loss = 0.0434, Train Accuracy = 99.08%
+Val Loss = 1.6859, Val Accuracy = 60.20%
+Epoch: 4, Batch: 0, Loss: 0.2387
+Epoch 4:
+Train Loss = 0.0864, Train Accuracy = 97.70%
+Val Loss = 0.3970, Val Accuracy = 84.90%
+Epoch: 5, Batch: 0, Loss: 0.0200
+Epoch 5:
+Train Loss = 0.0190, Train Accuracy = 99.65%
+Val Loss = 0.1168, Val Accuracy = 95.70%
+Epoch: 6, Batch: 0, Loss: 0.0101
+Epoch 6:
+Train Loss = 0.0118, Train Accuracy = 99.80%
+Val Loss = 0.8015, Val Accuracy = 75.60%
+Epoch: 7, Batch: 0, Loss: 0.0669
+Epoch 7:
+Train Loss = 0.0089, Train Accuracy = 99.85%
+Val Loss = 0.0830, Val Accuracy = 97.00%
+Epoch: 8, Batch: 0, Loss: 0.0022
+Epoch 8:
+Train Loss = 0.0025, Train Accuracy = 100.00%
+Val Loss = 0.0834, Val Accuracy = 96.85%
+Epoch: 9, Batch: 0, Loss: 0.0013
+Epoch 9:
+Train Loss = 0.0014, Train Accuracy = 100.00%
+Val Loss = 0.0550, Val Accuracy = 97.90%
+Epoch: 10, Batch: 0, Loss: 0.0006
+Epoch 10:
+Train Loss = 0.0011, Train Accuracy = 100.00%
+Val Loss = 0.0511, Val Accuracy = 98.10%
+Epoch: 11, Batch: 0, Loss: 0.0006
+Epoch 11:
+Train Loss = 0.0012, Train Accuracy = 100.00%
+Val Loss = 0.0544, Val Accuracy = 98.20%
+Epoch: 12, Batch: 0, Loss: 0.0004
+Epoch 12:
+Train Loss = 0.0015, Train Accuracy = 99.97%
+Val Loss = 0.0636, Val Accuracy = 97.70%
+Epoch: 13, Batch: 0, Loss: 0.0007
+Epoch 13:
+Train Loss = 0.0006, Train Accuracy = 100.00%
+Val Loss = 0.0476, Val Accuracy = 98.30%
+Epoch: 14, Batch: 0, Loss: 0.0004
+Epoch 14:
+Train Loss = 0.0004, Train Accuracy = 100.00%
+Val Loss = 0.0483, Val Accuracy = 98.40%
+Epoch: 15, Batch: 0, Loss: 0.0003
+Epoch 15:
+Train Loss = 0.0004, Train Accuracy = 100.00%
+Val Loss = 0.0484, Val Accuracy = 98.30%
+Epoch: 16, Batch: 0, Loss: 0.0003
+Epoch 16:
+Train Loss = 0.0004, Train Accuracy = 100.00%
+Val Loss = 0.0585, Val Accuracy = 97.95%
+Epoch: 17, Batch: 0, Loss: 0.0002
+Epoch 17:
+Train Loss = 0.0004, Train Accuracy = 100.00%
+Val Loss = 0.0442, Val Accuracy = 98.45%
+Epoch: 18, Batch: 0, Loss: 0.0002
+Epoch 18:
+Train Loss = 0.0003, Train Accuracy = 100.00%
+Val Loss = 0.0437, Val Accuracy = 98.35%
+Epoch: 19, Batch: 0, Loss: 0.0002
+Epoch 19:
+Train Loss = 0.0003, Train Accuracy = 100.00%
+Val Loss = 0.0463, Val Accuracy = 98.35%
+Epoch: 20, Batch: 0, Loss: 0.0004
+Epoch 20:
+Train Loss = 0.0013, Train Accuracy = 99.95%
+Val Loss = 0.2026, Val Accuracy = 93.40%
+Epoch: 21, Batch: 0, Loss: 0.0125
+Epoch 21:
+Train Loss = 0.0689, Train Accuracy = 97.92%
+Val Loss = 15.9599, Val Accuracy = 14.00%
+Epoch: 22, Batch: 0, Loss: 0.1740
+Epoch 22:
+Train Loss = 0.0712, Train Accuracy = 97.80%
+Val Loss = 0.5148, Val Accuracy = 81.55%
+Epoch: 23, Batch: 0, Loss: 0.0128
+Epoch 23:
+Train Loss = 0.0118, Train Accuracy = 99.83%
+Val Loss = 0.0708, Val Accuracy = 97.50%

@@ -1,0 +1,16 @@
+{"time":"2024-11-14T20:45:04.8246106+08:00","level":"INFO","msg":"using version","core version":"0.18.7"}
+{"time":"2024-11-14T20:45:04.8246106+08:00","level":"INFO","msg":"created symlink","path":"wandb_logs\\wandb\\run-20241114_204504-0ik4zwf7\\logs\\debug-core.log"}
+{"time":"2024-11-14T20:45:04.9912273+08:00","level":"INFO","msg":"created new stream","id":"0ik4zwf7"}
+{"time":"2024-11-14T20:45:04.9912273+08:00","level":"INFO","msg":"stream: started","id":"0ik4zwf7"}
+{"time":"2024-11-14T20:45:04.9912273+08:00","level":"INFO","msg":"handler: started","stream_id":"0ik4zwf7"}
+{"time":"2024-11-14T20:45:04.9912273+08:00","level":"INFO","msg":"sender: started","stream_id":"0ik4zwf7"}
+{"time":"2024-11-14T20:45:04.9912273+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"0ik4zwf7"}
+{"time":"2024-11-14T20:45:06.2895315+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2024-11-14T20:46:06.9618796+08:00","level":"INFO","msg":"stream: closing","id":"0ik4zwf7"}
+{"time":"2024-11-14T20:46:06.9618796+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2024-11-14T20:46:06.9624152+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2024-11-14T20:46:08.3282907+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2024-11-14T20:46:09.4072165+08:00","level":"INFO","msg":"handler: closed","stream_id":"0ik4zwf7"}
+{"time":"2024-11-14T20:46:09.4072165+08:00","level":"INFO","msg":"writer: Close: closed","stream_id":"0ik4zwf7"}
+{"time":"2024-11-14T20:46:09.4072165+08:00","level":"INFO","msg":"sender: closed","stream_id":"0ik4zwf7"}
+{"time":"2024-11-14T20:46:09.4082315+08:00","level":"INFO","msg":"stream: closed","id":"0ik4zwf7"}

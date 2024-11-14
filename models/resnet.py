@@ -35,17 +35,18 @@ class BasicBlock(nn.Module):
         out = self.relu(out)
         
         return out
-
+    
 # 定义 ResNet-18 结构
 class ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes=1000):
+    def __init__(self, block, layers, num_classes=20):
         super(ResNet, self).__init__()
         self.in_channels = 64
         
-        self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        # 输入图片较小(50x50)，减小kernel_size和stride
+        self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.ReLU(inplace=True)
-        self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        # 移除maxpool层，因为输入图片较小
         
         self.layer1 = self._make_layer(block, 64, layers[0], stride=1)
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
@@ -54,20 +55,13 @@ class ResNet(nn.Module):
         
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
         self.fc = nn.Linear(512 * block.expansion, num_classes)
+
     
-    def _make_layer(self, block, out_channels, blocks, stride):
-        layers = []
-        layers.append(block(self.in_channels, out_channels, stride))
-        self.in_channels = out_channels
-        for _ in range(1, blocks):
-            layers.append(block(out_channels, out_channels))
-        return nn.Sequential(*layers)
-    
-    def forward(self, x):
+    def forward(self, x, return_features=False):
+        # 输入x的形状为 [batch_size, 3, 50, 50]
         x = self.conv1(x)
         x = self.bn1(x)
         x = self.relu(x)
-        x = self.maxpool(x)
         
         x = self.layer1(x)
         x = self.layer2(x)
@@ -75,15 +69,48 @@ class ResNet(nn.Module):
         x = self.layer4(x)
         
         x = self.avgpool(x)
-        x = torch.flatten(x, 1)
-        x = self.fc(x)
+        features = torch.flatten(x, 1)
+        logits = self.fc(features)
         
-        return x
+        if return_features:
+            return logits, features
+        else:
+            return logits
 
-# 实例化 ResNet-18
-def resnet18(num_classes=1000):
+    def _make_layer(self, block, out_channels, blocks, stride=1):
+        layers = []
+        layers.append(block(self.in_channels, out_channels, stride))
+        self.in_channels = out_channels * block.expansion
+        for _ in range(1, blocks):
+            layers.append(block(self.in_channels, out_channels))
+        return nn.Sequential(*layers)
+
+def resnet18(num_classes=21):
     return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
 
-# 实例化模型
-model = resnet18(num_classes=10)  # 假设用于10类分类
-print(model)
+# 使用示例
+def process_batch_images(imgs):
+    """
+    处理一批图像
+    Args:
+        imgs: shape [144, 50, 50, 3] 的张量
+    Returns:
+        predictions: shape [12, 12] 的分类结果
+    """
+    # 转换为PyTorch期望的格式 [144, 3, 50, 50]
+    imgs = imgs.permute(0, 3, 1, 2)
+    
+    # 实例化模型
+    model = resnet18()
+    
+    # 前向传播
+    with torch.no_grad():
+        outputs = model(imgs)  # outputs shape: [144, 21]
+    
+    # 获取最可能的类别
+    _, predicted = torch.max(outputs, 1)
+    
+    # 重塑为12x12网格
+    predictions = predicted.reshape(12, 12)
+    
+    return predictions

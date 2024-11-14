@@ -1,0 +1,14 @@
+Loaded 4000 images from jk_zfls/round0_train
+Loaded 2400 images from jk_zfls/round0_eval
+Epoch: 0, Batch: 0, Loss: 3.0919
+Traceback (most recent call last):
+  File "D:\Seafile\私人资料库\课外学习&竞赛资料\九坤字符猎手挑战赛\train.py", line 223, in <module>
+    train()
+  File "D:\Seafile\私人资料库\课外学习&竞赛资料\九坤字符猎手挑战赛\train.py", line 171, in train
+    test_loss, test_acc = evaluate(model, eval_loader, criterion, device)
+  File "D:\Seafile\私人资料库\课外学习&竞赛资料\九坤字符猎手挑战赛\train.py", line 73, in evaluate
+    total_loss += loss.item()
+RuntimeError: CUDA error: device-side assert triggered
+CUDA kernel errors might be asynchronously reported at some other API call, so the stacktrace below might be incorrect.
+For debugging consider passing CUDA_LAUNCH_BLOCKING=1
+Compile with `TORCH_USE_CUDA_DSA` to enable device-side assertions.

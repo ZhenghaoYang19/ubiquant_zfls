@@ -2,9 +2,11 @@ import socketio
 import time
 import numpy as np
 import os
-
+from pprint import pprint
 import socketio.exceptions
-
+import torch
+from models.resnet import resnet18
+from test import GameClassifier
 
 def action_policy(action_shape):
     # 0: down, loc+=[1,0]
@@ -17,7 +19,25 @@ def action_policy(action_shape):
 
 def recognition(img):
     # class in [0, 20], size=(12, 12)
-    return np.random.randint(0, 21, size=(12, 12))
+    # 初始化分类器（建议在全局初始化一次）
+    global classifier
+    if not hasattr(recognition, 'classifier'):
+        recognition.classifier = GameClassifier(
+            model_path='models/best_model.pth',
+            openmax_path='models/openmax.pth'
+        )
+
+    imgs = torch.as_tensor(img).requires_grad_(True)
+    # Reshape to get 12x12 grid of 50x50 images
+    imgs = imgs.reshape(12, 50, 12, 50, 3)
+    # Transpose to get correct ordering
+    imgs = imgs.permute(0, 2, 1, 3, 4)
+    # Flatten first two dimensions (12x12 -> 144)
+    imgs = imgs.reshape(-1, 50, 50, 3)
+    
+    # 使用模型进行预测
+    predictions = recognition.classifier.predict(imgs)
+    return predictions
 
 
 def team_play_game(team_id, game_type, game_data_id, ip, port):
@@ -26,11 +46,11 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
     begin = game_type + game_data_id
     @sio.event
     def connect():
-        print(f"Connected to server, game_type: {game_type}, game data id: {begin}")
+        # print(f"Connected to server, game_type: {game_type}, game data id: {begin}")
         pass
     @sio.event
     def disconnect():
-        print(f"End game {begin}, disconnected from server")
+        # print(f"End game {begin}, disconnected from server")
         pass
     @sio.event
     def connect_error(data):
@@ -111,7 +131,7 @@ if __name__ == '__main__':
     
     # 初赛的第1阶段，game_data_id  must be in ['00000', '00001', ..., '00099']
     # 初赛的终榜阶段，game_data_id  must be in ['00000', '00001', ..., '00199']
-    game_data_id = [f'{i:05}' for i in range(0, 10)]
+    game_data_id = [f'{i:05}' for i in range(0, 1)]
     st = time.time()
     for gdi in game_data_id:
         team_play_game(team_id, game_type, gdi, ip, port)
