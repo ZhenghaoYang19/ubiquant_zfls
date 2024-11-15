@@ -1,0 +1,32 @@
+2024-11-15 19:12:28,294 INFO    MainThread:24308 [wandb_setup.py:_flush():79] Current SDK version is 0.18.7
+2024-11-15 19:12:28,294 INFO    MainThread:24308 [wandb_setup.py:_flush():79] Configure stats pid to 24308
+2024-11-15 19:12:28,294 INFO    MainThread:24308 [wandb_setup.py:_flush():79] Loading settings from C:\Users\zh-ya\.config\wandb\settings
+2024-11-15 19:12:28,294 INFO    MainThread:24308 [wandb_setup.py:_flush():79] Loading settings from D:\Seafile\私人资料库\课外学习&竞赛资料\九坤字符猎手挑战赛\wandb\settings
+2024-11-15 19:12:28,296 INFO    MainThread:24308 [wandb_setup.py:_flush():79] Loading settings from environment variables: {}
+2024-11-15 19:12:28,296 INFO    MainThread:24308 [wandb_setup.py:_flush():79] Applying setup settings: {'mode': None, '_disable_service': None}
+2024-11-15 19:12:28,296 INFO    MainThread:24308 [wandb_setup.py:_flush():79] Inferring run settings from compute environment: {'program_relpath': 'train.py', 'program_abspath': 'D:\\Seafile\\私人资料库\\课外学习&竞赛资料\\九坤字符猎手挑战赛\\train.py', 'program': 'D:\\Seafile\\私人资料库\\课外学习&竞赛资料\\九坤字符猎手挑战赛\\train.py'}
+2024-11-15 19:12:28,296 INFO    MainThread:24308 [wandb_setup.py:_flush():79] Applying login settings: {}
+2024-11-15 19:12:28,296 INFO    MainThread:24308 [wandb_init.py:_log_setup():533] Logging user logs to ./wandb_logs\wandb\run-20241115_191228-7jasqcnz\logs\debug.log
+2024-11-15 19:12:28,296 INFO    MainThread:24308 [wandb_init.py:_log_setup():534] Logging internal logs to ./wandb_logs\wandb\run-20241115_191228-7jasqcnz\logs\debug-internal.log
+2024-11-15 19:12:28,296 INFO    MainThread:24308 [wandb_init.py:init():619] calling init triggers
+2024-11-15 19:12:28,296 INFO    MainThread:24308 [wandb_init.py:init():626] wandb.init called with sweep_config: {}
+config: {'learning_rate': 0.001, 'batch_size': 128, 'epochs': 50, 'model': 'resnet18-openmax', 'num_classes': 20}
+2024-11-15 19:12:28,296 INFO    MainThread:24308 [wandb_init.py:init():669] starting backend
+2024-11-15 19:12:28,296 INFO    MainThread:24308 [wandb_init.py:init():673] sending inform_init request
+2024-11-15 19:12:28,298 INFO    MainThread:24308 [backend.py:_multiprocessing_setup():104] multiprocessing start_methods=spawn, using: spawn
+2024-11-15 19:12:28,298 INFO    MainThread:24308 [wandb_init.py:init():686] backend started and connected
+2024-11-15 19:12:28,300 INFO    MainThread:24308 [wandb_init.py:init():781] updated telemetry
+2024-11-15 19:12:28,485 INFO    MainThread:24308 [wandb_init.py:init():814] communicating run to backend with 90.0 second timeout
+2024-11-15 19:12:29,612 INFO    MainThread:24308 [wandb_init.py:init():867] starting run threads in backend
+2024-11-15 19:12:29,664 INFO    MainThread:24308 [wandb_run.py:_console_start():2456] atexit reg
+2024-11-15 19:12:29,664 INFO    MainThread:24308 [wandb_run.py:_redirect():2305] redirect: wrap_raw
+2024-11-15 19:12:29,664 INFO    MainThread:24308 [wandb_run.py:_redirect():2370] Wrapping output streams.
+2024-11-15 19:12:29,664 INFO    MainThread:24308 [wandb_run.py:_redirect():2395] Redirects installed.
+2024-11-15 19:12:29,667 INFO    MainThread:24308 [wandb_init.py:init():911] run started, returning control to user process
+2024-11-15 19:28:15,411 INFO    MainThread:24308 [wandb_run.py:_finish():2155] finishing run yangzh23/jk_zfls/7jasqcnz
+2024-11-15 19:28:15,412 INFO    MainThread:24308 [wandb_run.py:_atexit_cleanup():2420] got exitcode: 0
+2024-11-15 19:28:15,412 INFO    MainThread:24308 [wandb_run.py:_restore():2402] restore
+2024-11-15 19:28:15,412 INFO    MainThread:24308 [wandb_run.py:_restore():2408] restore done
+2024-11-15 19:28:21,249 INFO    MainThread:24308 [wandb_run.py:_footer_history_summary_info():3960] rendering history
+2024-11-15 19:28:21,251 INFO    MainThread:24308 [wandb_run.py:_footer_history_summary_info():3992] rendering summary
+2024-11-15 19:28:21,256 INFO    MainThread:24308 [wandb_run.py:_footer_sync_info():3921] logging synced files
