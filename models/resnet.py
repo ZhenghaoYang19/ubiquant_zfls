@@ -38,9 +38,10 @@ class BasicBlock(nn.Module):
     
 # 定义 ResNet-18 结构
 class ResNet(nn.Module):
-    def __init__(self, block, layers, num_classes=20):
+    def __init__(self, block, layers, num_classes=20, dropout_rate=0.5):
         super(ResNet, self).__init__()
         self.in_channels = 64
+        self.dropout_rate = dropout_rate
         
         # 输入图片较小(50x50)，减小kernel_size和stride
         self.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
@@ -54,10 +55,17 @@ class ResNet(nn.Module):
         self.layer4 = self._make_layer(block, 512, layers[3], stride=2)
         
         self.avgpool = nn.AdaptiveAvgPool2d((1, 1))
+        # 在全连接层前添加dropout
+        self.dropout = nn.Dropout(p=dropout_rate)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
-
-    
-    def forward(self, x, return_features=False):
+        
+        # 添加特征归一化
+        self.feature_norm = nn.LayerNorm(512 * block.expansion)
+        
+        # 在模型初始化时就将所有参数移到GPU
+        self.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+        
+    def forward(self, x, return_logits=False):
         # 输入x的形状为 [batch_size, 3, 50, 50]
         x = self.conv1(x)
         x = self.bn1(x)
@@ -70,12 +78,20 @@ class ResNet(nn.Module):
         
         x = self.avgpool(x)
         features = torch.flatten(x, 1)
+        features = self.feature_norm(features)  
+        # 在全连接层前使用dropout
+        features = self.dropout(features)
         logits = self.fc(features)
         
-        if return_features:
-            return logits, features
+        # 调整logits的scale
+        # logits = logits * 10  # 增大logits的scale以产生更明显的区分
+        
+        probs = torch.softmax(logits, dim=1)
+        
+        if return_logits:
+            return probs, logits
         else:
-            return logits
+            return probs
 
     def _make_layer(self, block, out_channels, blocks, stride=1):
         layers = []
@@ -85,8 +101,8 @@ class ResNet(nn.Module):
             layers.append(block(self.in_channels, out_channels))
         return nn.Sequential(*layers)
 
-def resnet18(num_classes=21):
-    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes)
+def resnet18(num_classes=21, dropout_rate=0.5):
+    return ResNet(BasicBlock, [2, 2, 2, 2], num_classes=num_classes, dropout_rate=0.5)
 
 # 使用示例
 def process_batch_images(imgs):

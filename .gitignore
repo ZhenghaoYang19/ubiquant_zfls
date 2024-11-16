@@ -1,2 +1,4 @@
 .env
-/models/best_model.pth
+/Paper
+__pycache__
+wandb/
