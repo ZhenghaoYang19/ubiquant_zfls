@@ -59,13 +59,10 @@ class ResNet(nn.Module):
         self.dropout = nn.Dropout(p=dropout_rate)
         self.fc = nn.Linear(512 * block.expansion, num_classes)
         
-        # 添加特征归一化
-        self.feature_norm = nn.LayerNorm(512 * block.expansion)
-        
         # 在模型初始化时就将所有参数移到GPU
         self.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
         
-    def forward(self, x, return_logits=False):
+    def forward(self, x, return_features=False):
         # 输入x的形状为 [batch_size, 3, 50, 50]
         x = self.conv1(x)
         x = self.bn1(x)
@@ -78,20 +75,12 @@ class ResNet(nn.Module):
         
         x = self.avgpool(x)
         features = torch.flatten(x, 1)
-        features = self.feature_norm(features)  
-        # 在全连接层前使用dropout
         features = self.dropout(features)
         logits = self.fc(features)
         
-        # 调整logits的scale
-        # logits = logits * 10  # 增大logits的scale以产生更明显的区分
-        
-        probs = torch.softmax(logits, dim=1)
-        
-        if return_logits:
-            return probs, logits
-        else:
-            return probs
+        if return_features:
+            return logits, features
+        return logits
 
     def _make_layer(self, block, out_channels, blocks, stride=1):
         layers = []

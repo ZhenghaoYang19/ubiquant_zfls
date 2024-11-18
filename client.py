@@ -6,7 +6,114 @@ from pprint import pprint
 import socketio.exceptions
 import torch
 from models.resnet import resnet18
-from test import GameClassifier
+from torchvision import transforms
+from utils.data_stats import load_dataset_stats, calculate_dataset_stats
+from torch.utils.data import Dataset, DataLoader
+from PIL import Image
+
+class PatchDataset(Dataset):
+    def __init__(self, patches, transform=None):
+        """
+        Args:
+            patches: shape (N, 50, 50, 3) 的numpy数组
+            transform: 图像变换
+        """
+        self.patches = patches
+        self.transform = transform
+    
+    def __len__(self):
+        return len(self.patches)
+    
+    def __getitem__(self, idx):
+        patch = self.patches[idx]
+        if self.transform:
+            patch = self.transform(patch)
+        return patch
+
+class ImageClassifier:
+    def __init__(self):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        images_path = os.path.join('jk_zfls', 'round0_train')
+        # 尝试加载已保存的数据集统计信息，如果不存在则重新计算
+        try:
+            self.mean, self.std = load_dataset_stats()
+            print("Loaded pre-calculated dataset statistics")
+        except FileNotFoundError:
+            print("FileNotFound, Calculating dataset statistics...")
+            self.mean, self.std = calculate_dataset_stats(images_path)
+        # 定义图像变换
+        self.transform = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Normalize(mean=self.mean, std=self.std)
+        ])
+        
+        # 加载模型
+        self.model = resnet18(num_classes=20)
+        checkpoint = torch.load('models/best_model.pth')
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.model = self.model.to(self.device)
+        self.model.eval()
+        
+        # 加载OpenMax模型
+        self.openmax = torch.load('models/best_openmax.pth')
+        self.threshold = 0.08  # 未知类别判断阈值
+        
+    def resnet_predict(self, patches):
+        """
+        仅使用ResNet模型预测图像块的类别（不使用MetaMax）
+        Args:
+            patches: shape (N, 50, 50, 3) 的torch tensor
+        Returns:
+            predictions: shape (N,) 的类别预测结果
+        """
+        # 创建数据集和数据加载器
+        dataset = PatchDataset(patches, transform=self.transform)
+        dataloader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=4, pin_memory=True)
+        
+        predictions = []
+        with torch.no_grad():
+            for batch in dataloader:
+                # 移动到设备
+                batch = batch.to(self.device)
+                
+                # 获取logits并直接预测
+                logits, _ = self.model(batch, return_features=True)
+                _, batch_predictions = logits.max(1)
+                predictions.append(batch_predictions.cpu())
+        
+        return torch.cat(predictions)
+    
+    def predict(self, patches):
+        """
+        使用OpenMax预测图像块的类别
+        Args:
+            patches: shape (N, 50, 50, 3) 的torch tensor
+        Returns:
+            predictions: shape (N,) 的类别预测结果
+        """
+        # 创建数据集和数据加载器
+        dataset = PatchDataset(patches, transform=self.transform)
+        dataloader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=4, pin_memory=True)
+        
+        predictions = []
+        with torch.no_grad():
+            for batch in dataloader:
+                # 移动到设备
+                batch = batch.to(self.device)
+                
+                # 获取特征和logits
+                logits, features = self.model(batch, return_features=True)
+                
+                # 使用OpenMax进行预测
+                openmax_probs = self.openmax.predict(features, logits)
+                
+                # 使用阈值判断未知类别
+                max_probs, batch_predictions = torch.max(openmax_probs[:, :-1], dim=1)
+                batch_predictions[max_probs < self.threshold] = 20
+                predictions.append(batch_predictions.cpu())
+        
+        return torch.cat(predictions)
+
 
 def action_policy(action_shape):
     # 0: down, loc+=[1,0]
@@ -16,28 +123,35 @@ def action_policy(action_shape):
     # 4: collect
     return np.random.randint(action_shape)
 
-
 def recognition(img):
-    # class in [0, 20], size=(12, 12)
-    # 初始化分类器（建议在全局初始化一次）
-    global classifier
+    """
+    Args:
+        img: shape [600,600,3] 的list，RGB格式
+    Returns:
+        grid: (12,12) 的numpy数组
+    """
     if not hasattr(recognition, 'classifier'):
-        recognition.classifier = GameClassifier(
-            model_path='models/best_model.pth',
-            openmax_path='models/openmax.pth'
-        )
-
-    imgs = torch.as_tensor(img).requires_grad_(True)
-    # Reshape to get 12x12 grid of 50x50 images
-    imgs = imgs.reshape(12, 50, 12, 50, 3)
-    # Transpose to get correct ordering
-    imgs = imgs.permute(0, 2, 1, 3, 4)
-    # Flatten first two dimensions (12x12 -> 144)
-    imgs = imgs.reshape(-1, 50, 50, 3)
+        recognition.classifier = ImageClassifier()
     
-    # 使用模型进行预测
-    predictions = recognition.classifier.predict(imgs)
-    return predictions
+    # 先转换为numpy数组
+    img = np.array(img, dtype=np.uint8)
+    # 将图像分割成网格
+    patches = []
+    tile_size = 50
+    
+    for i in range(12):
+        for j in range(12):
+            patch = img[i*tile_size:(i+1)*tile_size, j*tile_size:(j+1)*tile_size]
+            patches.append(patch)
+    
+    patches = np.array(patches)
+    # 获取预测结果
+    # predictions = recognition.classifier.resnet_predict(patches)
+    predictions = recognition.classifier.predict(patches)
+    # 重塑为12x12网格
+    grid = predictions.reshape(12, 12)
+    
+    return grid.numpy()
 
 
 def team_play_game(team_id, game_type, game_data_id, ip, port):
@@ -131,7 +245,7 @@ if __name__ == '__main__':
     
     # 初赛的第1阶段，game_data_id  must be in ['00000', '00001', ..., '00099']
     # 初赛的终榜阶段，game_data_id  must be in ['00000', '00001', ..., '00199']
-    game_data_id = [f'{i:05}' for i in range(0, 1)]
+    game_data_id = [f'{i:05}' for i in range(0, 40)]
     st = time.time()
     for gdi in game_data_id:
         team_play_game(team_id, game_type, gdi, ip, port)
