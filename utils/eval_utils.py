@@ -50,7 +50,7 @@ def evaluate_known_classes(model, data_loader, criterion, device):
     
     return avg_loss, accuracy, errors
 
-def evaluate_openmax(openmax, model, val_loader, device, threshold=0.3, verbose=False):
+def evaluate_openmax(openmax, model, val_loader, device, threshold=0.08, verbose=False):
     model.eval()
     correct = 0
     total = 0
@@ -68,12 +68,13 @@ def evaluate_openmax(openmax, model, val_loader, device, threshold=0.3, verbose=
             logits, features = model(images, return_features=True)
             
             # 使用features和logits进行预测
-            openmax_probs = openmax.predict(features, logits)
+            # openmax_probs = openmax.predict(features, logits)
+            openmax_probs = openmax.predict_cosine(features, logits)
             
             # 使用阈值判断未知类别
-            max_probs, predictions = torch.max(openmax_probs[:, :-1], dim=1)
-            # 如果最大概率小于阈值，则判定为未知类别(20)
-            predictions[max_probs < threshold] = 20
+            max_probs, predictions = torch.max(openmax_probs, dim=1)
+            # # 如果最大概率小于阈值，则判定为未知类别(20)
+            # predictions[max_probs < threshold] = 20
             
             # 分别统计已知类和未知类的准确率
             known_mask = labels < 20
@@ -107,7 +108,7 @@ def evaluate_openmax(openmax, model, val_loader, device, threshold=0.3, verbose=
         
     return overall_acc, known_acc, unknown_acc
 
-def evaluate_metamax(metamax, model, val_loader, device, threshold=0.3, verbose=False):
+def evaluate_metamax(metamax, model, val_loader, device, threshold=0.08, verbose=False):
     """评估MetaMax模型的性能
     Args:
         metamax: MetaMax模型实例

@@ -8,6 +8,7 @@ from utils.eval_utils import evaluate_openmax, evaluate_metamax
 from torchvision import transforms
 from utils.data_stats import load_dataset_stats
 from pprint import pprint
+
 def prepare_data_and_model(model_path='models/best_model.pth'):
     """准备数据和模型"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -23,7 +24,7 @@ def prepare_data_and_model(model_path='models/best_model.pth'):
     train_dataset = GameDataset('jk_zfls/round0_train', num_labels=20, transform=transform)
     val_dataset = GameDataset('jk_zfls/round0_eval', num_labels=21, transform=transform)
     
-    batch_size = 256
+    batch_size = 400
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, 
                             num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, 
@@ -56,10 +57,11 @@ def collect_features(model, train_loader, device):
 def train_openmax(features, labels, model, val_loader, device):
     """训练和评估OpenMax模型"""
     # OpenMax特定的超参数搜索空间
-    alpha_range = [5, 10, 15]
+    alpha_range = [5, 10, 15, 20]
     # tailsize_range = [20]
-    tailsize_range = [15, 20, 25, 30]
-    threshold_range = [0.06, 0.08, 0.1, 0.12, 0.14, 0.16]
+    tailsize_range = [10, 15, 20, 25, 30]
+    threshold_range = [0.08]
+    # threshold_range = [0.06, 0.08, 0.1, 0.12, 0.14, 0.16]
     
     best_params = {
         'alpha': None,
@@ -72,10 +74,10 @@ def train_openmax(features, labels, model, val_loader, device):
     print("\n=== Training OpenMax ===")
     for alpha in alpha_range:
         for tailsize in tailsize_range:
-            print(f"\nTesting OpenMax with alpha={alpha}, tailsize={tailsize}")
+            print(f"\nTraining OpenMax with alpha={alpha}, tailsize={tailsize}")
             
             openmax = OpenMax(num_classes=20, tailsize=tailsize, alpha=alpha)
-            openmax.fit(features, labels)
+            openmax.fit_cosine(features, labels)
             
             for threshold in threshold_range:
                 overall_acc, known_acc, unknown_acc = evaluate_openmax(
@@ -144,7 +146,7 @@ def train_metamax(features, labels, model, val_loader, device):
 
 if __name__ == '__main__':
     # 准备数据和模型
-    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/best_model.pth')
+    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/best_model_99.25.pth')
     
     # 收集特征
     features, labels = collect_features(model, train_loader, device)
@@ -157,9 +159,9 @@ if __name__ == '__main__':
     print(f"OpenMax model saved to models/best_openmax.pth")
 
     # 训练MetaMax
-    best_metamax_params = train_metamax(features, labels, model, val_loader, device)
-    print("\nSaving MetaMax model...")
-    pprint(best_metamax_params)
-    torch.save(best_metamax_params['model'], 'models/best_metamax.pth')
-    print(f"MetaMax model saved to models/best_metamax.pth")
+    # best_metamax_params = train_metamax(features, labels, model, val_loader, device)
+    # print("\nSaving MetaMax model...")
+    # pprint(best_metamax_params)
+    # torch.save(best_metamax_params['model'], 'models/best_metamax.pth')
+    # print(f"MetaMax model saved to models/best_metamax.pth")
 
