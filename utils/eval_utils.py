@@ -69,7 +69,7 @@ def evaluate_openmax(openmax, model, val_loader, device, threshold=0.08, verbose
             
             # 使用features和logits进行预测
             # openmax_probs = openmax.predict(features, logits)
-            openmax_probs = openmax.predict_cosine(features, logits)
+            openmax_probs = openmax.predict(features, logits)
             
             # 使用阈值判断未知类别
             max_probs, predictions = torch.max(openmax_probs, dim=1)

@@ -49,7 +49,7 @@ class ImageClassifier:
         
         # 加载模型
         self.model = resnet18(num_classes=20)
-        checkpoint = torch.load('models/best_model.pth')
+        checkpoint = torch.load('models/best_model_99.75.pth')
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model = self.model.to(self.device)
         self.model.eval()
@@ -93,7 +93,7 @@ class ImageClassifier:
         """
         # 创建数据集和数据加载器
         dataset = PatchDataset(patches, transform=self.transform)
-        dataloader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=4, pin_memory=True)
+        dataloader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=8, pin_memory=True)
         
         predictions = []
         with torch.no_grad():

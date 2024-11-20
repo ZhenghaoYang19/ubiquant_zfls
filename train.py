@@ -13,6 +13,7 @@ from models.metamax import MetaMax
 from utils.data_stats import calculate_dataset_stats, load_dataset_stats
 from utils.eval_utils import evaluate_known_classes, evaluate_openmax, evaluate_metamax
 from pprint import pprint
+import math
 
 class GameDataset(Dataset):
     def __init__(self, data_dir, num_labels=20, transform=None):
@@ -116,14 +117,29 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
     
-    # 加载模型
+    # 加载模型（和已有参数）
     model = resnet18(num_classes=20, dropout_rate=dropout_rate)
+    checkpoint = torch.load('models/best_model_99.75.pth')
+    model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
     
-    # 定义损失函数和优化器
+    # 定义损失函数和优化器，使用更小的学习率
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=num_epochs)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate * 0.1, weight_decay=1e-4)
+    
+    # optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
+    # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
+    # 使用带 warmup 的 cosine 调度器
+    num_training_steps = len(train_loader) * num_epochs
+    num_warmup_steps = len(train_loader) * 2      # 2个epoch的warmup
+    
+    def warmup_cosine_schedule(step):
+        if step < num_warmup_steps:
+            return float(step) / float(max(1, num_warmup_steps))
+        progress = float(step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
+        return 0.5 * (1.0 + math.cos(math.pi * progress))
+    
+    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, warmup_cosine_schedule)
     
     best_val_acc = 0
     patience_counter = 0  # 计数器，记录连续没有提升的轮数
@@ -151,7 +167,7 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
         
         # 验证阶段（只验证已知类别）
         val_loss, val_acc, val_errors = evaluate_known_classes(model, val_loader, criterion, device)
-        if val_acc > 98:
+        if val_acc > 99:
             pprint(val_errors)
         
         # 记录到wandb
@@ -233,4 +249,4 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     wandb.finish()
 
 if __name__ == '__main__':
-    train(num_epochs=60, batch_size=200, learning_rate=0.001, dropout_rate=0.3, patience=10)
+    train(num_epochs=100, batch_size=64, learning_rate=0.001, dropout_rate=0.3, patience=20)

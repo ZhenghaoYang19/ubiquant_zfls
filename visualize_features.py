@@ -156,40 +156,40 @@ if __name__ == "__main__":
         transforms.Normalize(mean=mean, std=std)
     ])
     # # 加载训练数据集
-    # train_dataset = GameDataset(
-    #     data_dir='jk_zfls/round0_train',
-    #     num_labels=20,
-    #     transform=transform
-    # )
-    # train_loader = DataLoader(
-    #     train_dataset,
-    #     batch_size=400,
-    #     shuffle=False,  # 设为False以保持数据顺序
-    #     num_workers=4,
-    #     pin_memory=True
-    # )
-    # 加载特征
-    # features, labels = load_features_labels(
-    #     model_path='models/best_model_99.25.pth',
-    #     data_loader=train_loader,
-    #     device=device
-    # )
-    
-    eval_dataset = GameDataset(
-        data_dir='jk_zfls/round0_eval',
-        num_labels=21,
+    train_dataset = GameDataset(
+        data_dir='jk_zfls/round0_train',
+        num_labels=20,
         transform=transform
     )
-    eval_loader = DataLoader(
-        eval_dataset,
+    train_loader = DataLoader(
+        train_dataset,
         batch_size=400,
-        shuffle=False,
+        shuffle=False,  # 设为False以保持数据顺序
+        num_workers=4,
+        pin_memory=True
     )
+    ## 加载特征
     features, labels = load_features_labels(
-        model_path='models/best_model_99.25.pth',
-        data_loader=eval_loader,
+        model_path='models/best_model_99.75_01.pth',
+        data_loader=train_loader,
         device=device
     )
+    
+    # eval_dataset = GameDataset(
+    #     data_dir='jk_zfls/round0_eval',
+    #     num_labels=21,
+    #     transform=transform
+    # )
+    # eval_loader = DataLoader(
+    #     eval_dataset,
+    #     batch_size=400,
+    #     shuffle=False,
+    # )
+    # features, labels = load_features_labels(
+    #     model_path='models/best_model_99.75_01.pth',
+    #     data_loader=eval_loader,
+    #     device=device
+    # )
     # 可视化特征
     # print("Visualizing features using t-SNE...")
     # visualize_features(
@@ -204,6 +204,6 @@ if __name__ == "__main__":
         features=features,
         labels=labels,
         method='umap',
-        save_path='outputs/eval_dataset_features.png',
-        include_unknown=True
+        save_path='outputs/train_dataset_features.png',
+        include_unknown=False
     )

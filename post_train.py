@@ -57,7 +57,7 @@ def collect_features(model, train_loader, device):
 def train_openmax(features, labels, model, val_loader, device):
     """训练和评估OpenMax模型"""
     # OpenMax特定的超参数搜索空间
-    alpha_range = [5, 10, 15, 20]
+    alpha_range = [3, 5, 10, 15, 20]
     # tailsize_range = [20]
     tailsize_range = [10, 15, 20, 25, 30]
     threshold_range = [0.08]
@@ -77,7 +77,7 @@ def train_openmax(features, labels, model, val_loader, device):
             print(f"\nTraining OpenMax with alpha={alpha}, tailsize={tailsize}")
             
             openmax = OpenMax(num_classes=20, tailsize=tailsize, alpha=alpha)
-            openmax.fit_cosine(features, labels)
+            openmax.fit(features, labels)
             
             for threshold in threshold_range:
                 overall_acc, known_acc, unknown_acc = evaluate_openmax(
@@ -146,7 +146,7 @@ def train_metamax(features, labels, model, val_loader, device):
 
 if __name__ == '__main__':
     # 准备数据和模型
-    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/best_model_99.25.pth')
+    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/best_model_99.92_02.pth')
     
     # 收集特征
     features, labels = collect_features(model, train_loader, device)
