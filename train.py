@@ -249,4 +249,4 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     wandb.finish()
 
 if __name__ == '__main__':
-    train(num_epochs=60, batch_size=64, learning_rate=0.001, dropout_rate=0.3, patience=10)
+    train(num_epochs=100, batch_size=64, learning_rate=0.001, dropout_rate=0.3, patience=20)
