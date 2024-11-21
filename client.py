@@ -11,25 +11,6 @@ from utils.data_stats import load_dataset_stats, calculate_dataset_stats
 from torch.utils.data import Dataset, DataLoader
 from PIL import Image
 
-class PatchDataset(Dataset):
-    def __init__(self, patches, transform=None):
-        """
-        Args:
-            patches: shape (N, 50, 50, 3) 的numpy数组
-            transform: 图像变换
-        """
-        self.patches = patches
-        self.transform = transform
-    
-    def __len__(self):
-        return len(self.patches)
-    
-    def __getitem__(self, idx):
-        patch = self.patches[idx]
-        if self.transform:
-            patch = self.transform(patch)
-        return patch
-
 class ImageClassifier:
     def __init__(self):
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -49,14 +30,14 @@ class ImageClassifier:
         
         # 加载模型
         self.model = resnet18(num_classes=20)
-        checkpoint = torch.load('models/best_model_99.75.pth')
+        checkpoint = torch.load('models/best_model_99.92_02.pth')
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.model = self.model.to(self.device)
         self.model.eval()
         
         # 加载OpenMax模型
-        self.openmax = torch.load('models/best_openmax.pth')
-        self.threshold = 0.08  # 未知类别判断阈值
+        self.openmax = torch.load('models/best_openmax_95.62_02.pth')
+        self.multiplier = 0.5
         
     def resnet_predict(self, patches):
         """
@@ -87,32 +68,24 @@ class ImageClassifier:
         """
         使用OpenMax预测图像块的类别
         Args:
-            patches: shape (N, 50, 50, 3) 的torch tensor
+            patches: shape (N, 50, 50, 3) 的numpy array
         Returns:
             predictions: shape (N,) 的类别预测结果
         """
-        # 创建数据集和数据加载器
-        dataset = PatchDataset(patches, transform=self.transform)
-        dataloader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=8, pin_memory=True)
+        # 直接将整个batch转换为tensor并归一化
+        patches_tensor = torch.from_numpy(patches).float().permute(0, 3, 1, 2) / 255.0  # (N,3,50,50)
+        patches_tensor = transforms.Normalize(mean=self.mean, std=self.std)(patches_tensor)
+        patches_tensor = patches_tensor.to(self.device)
         
-        predictions = []
         with torch.no_grad():
-            for batch in dataloader:
-                # 移动到设备
-                batch = batch.to(self.device)
-                
-                # 获取特征和logits
-                logits, features = self.model(batch, return_features=True)
-                
-                # 使用OpenMax进行预测
-                openmax_probs = self.openmax.predict(features, logits)
-                
-                # 使用阈值判断未知类别
-                max_probs, batch_predictions = torch.max(openmax_probs[:, :-1], dim=1)
-                batch_predictions[max_probs < self.threshold] = 20
-                predictions.append(batch_predictions.cpu())
-        
-        return torch.cat(predictions)
+            # 获取特征和logits
+            logits, features = self.model(patches_tensor, return_features=True)
+            
+            # 使用OpenMax进行预测
+            openmax_probs = self.openmax.predict(features, logits, multiplier=self.multiplier)
+            predictions = torch.argmax(openmax_probs, dim=1)
+
+        return predictions, openmax_probs
 
 
 def action_policy(action_shape):
@@ -147,11 +120,11 @@ def recognition(img):
     patches = np.array(patches)
     # 获取预测结果
     # predictions = recognition.classifier.resnet_predict(patches)
-    predictions = recognition.classifier.predict(patches)
+    predictions, openmax_probs = recognition.classifier.predict(patches)
     # 重塑为12x12网格
     grid = predictions.reshape(12, 12)
     
-    return grid.numpy()
+    return grid.cpu().numpy(), openmax_probs
 
 
 def team_play_game(team_id, game_type, game_data_id, ip, port):
@@ -193,7 +166,8 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
                     if (game_type == 'a'):
                         grid = np.array(data['grid'], dtype=int)
                     if (game_type == '2'):
-                        grid = recognition(data['img'])
+                        grid, openmax_probs = recognition(data['img'])
+                        print('Recognition Finished!')
                         send_data['grid_pred'] = grid.tolist()
                 score_npy = f'./{data["team_id"]}/{data["game_id"]}_score.npy'
                 if os.path.exists(score_npy):

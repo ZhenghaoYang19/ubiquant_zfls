@@ -26,14 +26,14 @@ def test_models():
     
     # 加载基础模型
     model = resnet18(num_classes=20)
-    checkpoint = torch.load('models/best_model_99.25.pth')
+    checkpoint = torch.load('models/best_model_99.92_02.pth')
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
     model.eval()
     
     # 加载OpenMax和MetaMax模型
     try:
-        openmax = torch.load('models/best_openmax.pth')
+        openmax = torch.load('models/best_openmax_94.71_01.pth')
         # metamax = torch.load('models/best_metamax.pth')
         print("Successfully loaded OpenMax and MetaMax models")
     except Exception as e:
@@ -50,7 +50,7 @@ def test_models():
     
     # 测试ResNet + OpenMax
     print("\n=== Testing ResNet + OpenMax ===")
-    evaluate_openmax(openmax, model, test_loader, device, verbose=True)
+    evaluate_openmax(openmax, model, test_loader, device, multiplier=0.5, fraction=0.2, verbose=True)
     
     # 测试ResNet + MetaMax
     # print("\n=== Testing ResNet + MetaMax ===")

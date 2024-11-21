@@ -140,10 +140,15 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
         return 0.5 * (1.0 + math.cos(math.pi * progress))
     
     scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, warmup_cosine_schedule)
-    
-    best_val_acc = 0
+
     patience_counter = 0  # 计数器，记录连续没有提升的轮数
-    
+    best_params = {
+        'epoch': None,
+        'model_state_dict': None,
+        'optimizer_state_dict': None,
+        'loss': None,
+        'best_val_acc': 0
+    }
     for epoch in range(num_epochs):
         # 训练阶段
         model.train()
@@ -167,8 +172,6 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
         
         # 验证阶段（只验证已知类别）
         val_loss, val_acc, val_errors = evaluate_known_classes(model, val_loader, criterion, device)
-        if val_acc > 99:
-            pprint(val_errors)
         
         # 记录到wandb
         wandb.log({
@@ -184,18 +187,16 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
         # 更新学习率
         scheduler.step()
         
-        # 保存最佳模型（基于验证集准确率）
-        if val_acc > best_val_acc:
-            best_val_acc = val_acc
+        # 记录最佳模型（基于验证集准确率）
+        if val_acc > best_params['best_val_acc']:
             patience_counter = 0  # 重置计数器
-            save_dict = {
+            best_params.update({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
                 'loss': val_loss,
-            }
-            torch.save(save_dict, 'models/best_model.pth')
-            print(f'Saved best model at epoch {epoch}')
+                'best_val_acc': val_acc
+            })
         else:
             patience_counter += 1  # 增加计数器
             print(f'Validation accuracy did not improve. Patience: {patience_counter}/{patience}')
@@ -209,15 +210,14 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
             print(f'Achieved 100% accuracy at epoch {epoch}')
             break
             
-        print(f'Best val acc: {best_val_acc:.2f}%')
     
-    # 训练完成后，加载最佳模型的参数
-    print("Loading best model parameters...")
-    checkpoint = torch.load('models/best_model.pth')
-    model.load_state_dict(checkpoint['model_state_dict'])
+    # 训练完成后，保存最佳模型的参数
+    print("Saving best model parameters...")
+    torch.save(best_params, 'models/best_model.pth')
     
     # 使用最佳模型收集features
     print("Collecting features from best model for OpenMax/MetaMax training...")
+    model.load_state_dict(best_params['model_state_dict'])
     model.eval()
     features_list = []
     labels_list = []

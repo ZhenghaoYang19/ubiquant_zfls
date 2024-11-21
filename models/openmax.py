@@ -37,11 +37,12 @@ class OpenMax:
             mr.fit_high(tailtofit, self.tailsize)
             self.weibulls.append(mr)
     
-    def predict(self, features, logits):
+    def predict(self, features, logits, multiplier):
         """批量预测
         Args:
             features: torch.Tensor, shape (batch_size, feature_dim)
             logits: torch.Tensor, shape (batch_size, num_classes)
+            multiplier: float, Weibull分数的缩放因子
         Returns:
             torch.Tensor: shape (batch_size, num_classes + 1)
         """
@@ -73,12 +74,16 @@ class OpenMax:
                 for dist in dists[:, c]
             ]).to(device)
         
-        # 对每个样本，使用 Weibull 分数对激活值进行调整，降低样本属于未知类别的可能性。
+        # 对每个样本，使用 Weibull 分数对激活值进行调整，降低/增大样本属于未知类别的可能性。
+        # 确保 weibull_scores 不会超过1
+        weibull_scores = torch.clamp(weibull_scores * multiplier, max=1.0)
+        
+        # 对每个样本，使用调整后的Weibull分数修改激活值
         for i in range(batch_size):
             # 按距离排序获取前alpha个类别
             sorted_idx = torch.argsort(dists[i])[:self.alpha]
             
-            # 修改激活向量，使用更温和的衰减
+            # 修改激活向量
             for j, idx in enumerate(sorted_idx):
                 weight = alpha_weights[j] * weibull_scores[i, idx]
                 modified_activations[i, idx] *= (1 - weight)

@@ -39,38 +39,49 @@ def prepare_data_and_model(model_path='models/best_model.pth'):
     
     return model, train_loader, val_loader, device
 
-def collect_features(model, train_loader, device):
+def collect_features(model, loader, device, return_logits=False):
     """收集特征和标签"""
     features_list = []
+    logits_list = []
     labels_list = []
     
     print("Collecting features and logits from training set...")
     with torch.no_grad():
-        for images, labels, paths in train_loader:
+        for images, labels, paths in loader:
             images = images.to(device)
-            _, features = model(images, return_features=True)
+            if return_logits:
+                logits, features = model(images, return_features=True)
+                logits_list.append(logits.cpu())
+            else:
+                _, features = model(images, return_features=True)
             features_list.append(features.cpu())
             labels_list.append(labels)
     
-    return torch.cat(features_list), torch.cat(labels_list)
+    if return_logits:
+        return torch.cat(features_list), torch.cat(logits_list), torch.cat(labels_list)
+    else:
+        return torch.cat(features_list), torch.cat(labels_list)
 
-def train_openmax(features, labels, model, val_loader, device):
-    """训练和评估OpenMax模型"""
+def train_openmax(features,labels, model, val_loader, device, fraction=0.2):
+    """训练和评估OpenMax模型
+    fraction: 未知类别比例
+    """
     # OpenMax特定的超参数搜索空间
-    alpha_range = [3, 5, 10, 15, 20]
-    # tailsize_range = [20]
-    tailsize_range = [10, 15, 20, 25, 30]
-    threshold_range = [0.08]
-    # threshold_range = [0.06, 0.08, 0.1, 0.12, 0.14, 0.16]
+    # alpha_range = [3, 5, 8, 12, 16, 20]
+    alpha_range = [15, 16, 17, 18, 19, 20]
+    # tailsize_range = [10, 15, 20, 25, 30]
+    tailsize_range = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    # multiplier_range = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5]
+    multiplier_range = [0.3, 0.4, 0.5, 0.6, 0.7]
     
     best_params = {
         'alpha': None,
         'tailsize': None,
-        'threshold': None,
+        'multiplier': None,
         'accuracy': .0,
         'model': None
     }
-    
+    val_features, val_logits, val_labels = collect_features(model, val_loader, device)
     print("\n=== Training OpenMax ===")
     for alpha in alpha_range:
         for tailsize in tailsize_range:
@@ -78,28 +89,38 @@ def train_openmax(features, labels, model, val_loader, device):
             
             openmax = OpenMax(num_classes=20, tailsize=tailsize, alpha=alpha)
             openmax.fit(features, labels)
-            
-            for threshold in threshold_range:
+            print(f"Training finished, evaluating...")
+            for multiplier in multiplier_range:
+                print(f"Evaluating with multiplier={multiplier}")
                 overall_acc, known_acc, unknown_acc = evaluate_openmax(
-                    openmax, model, val_loader, device, threshold=threshold, verbose=False
+                    openmax, val_features, val_logits, val_labels, multiplier=multiplier, fraction=fraction, verbose=False
                 )
-                
                 if overall_acc > best_params['accuracy']:
                     best_params.update({
                         'alpha': alpha,
                         'tailsize': tailsize,
-                        'threshold': threshold,
+                        'multiplier': multiplier,
                         'accuracy': overall_acc,
                         'model': openmax
                     })
-                    if overall_acc > 90.0:
-                        print(f"\nNew best OpenMax parameters found:")
-                        print(f"Alpha: {alpha}")
-                        print(f"Tailsize: {tailsize}")
-                        print(f"Threshold: {threshold}")
-                        print(f"Overall Accuracy: {overall_acc:.2f}%")
-                        print(f"Known Classes Accuracy: {known_acc:.2f}%")
-                        print(f"Unknown Class Accuracy: {unknown_acc:.2f}%")
+                    print(f"\nNew best OpenMax parameters found:")
+                    print(f"Alpha: {alpha}")
+                    print(f"Tailsize: {tailsize}")
+                    print(f"Multiplier: {multiplier}")
+                    print(f"Overall Accuracy: {overall_acc:.2f}%")
+                    print(f"Known Classes Accuracy: {known_acc:.2f}%")
+                    print(f"Unknown Class Accuracy: {unknown_acc:.2f}%")
+                    
+                elif overall_acc > 95.0:
+
+                    print(f"Alpha: {alpha}")
+                    print(f"Tailsize: {tailsize}")
+                    print(f"Multiplier: {multiplier}")
+                    print(f"Overall Accuracy: {overall_acc:.2f}%")
+                    print(f"Known Classes Accuracy: {known_acc:.2f}%")
+                    print(f"Unknown Class Accuracy: {unknown_acc:.2f}%")
+
+                    
     
     return best_params
 
@@ -149,7 +170,7 @@ if __name__ == '__main__':
     model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/best_model_99.92_02.pth')
     
     # 收集特征
-    features, labels = collect_features(model, train_loader, device)
+    features, labels = collect_features(model, train_loader, device, return_logits=False)
     
     # 训练OpenMax
     best_openmax_params = train_openmax(features, labels, model, val_loader, device)
