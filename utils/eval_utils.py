@@ -162,3 +162,4 @@ def evaluate_metamax(metamax, model, val_loader, device, threshold=0.08, verbose
         print(f"Unknown Class Accuracy: {unknown_acc:.2f}%")
         
     return overall_acc, known_acc, unknown_acc
+

@@ -1,12 +1,10 @@
 import torch
-import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 import seaborn as sns
-from torch.utils.data import DataLoader
 import umap
-from models.resnet import resnet18
 import os
+from post_train import collect_features, prepare_data_and_model
 
 def visualize_features(features, labels, method='tsne', save_path=None, include_unknown=False):
     """
@@ -97,99 +95,27 @@ def visualize_features(features, labels, method='tsne', save_path=None, include_
     plt.close()
 
 
-
-def load_features_labels(model_path, data_loader, device=None):
-    """
-    加载模型和数据，提取特征和标签
-    
-    Args:
-        model_path: str, 模型参数文件路径
-        data_loader: DataLoader, 数据加载器
-        device: torch.device, 计算设备
-    
-    Returns:
-        features: torch.Tensor, 特征向量
-        labels: torch.Tensor, 标签
-    """
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    
-    # 加载模型
-    model = resnet18(num_classes=20)
-    checkpoint = torch.load(model_path)
-    model.load_state_dict(checkpoint['model_state_dict'])
-    model = model.to(device)
-    model.eval()
-    
-    # 收集特征和标签
-    features_list = []
-    labels_list = []
-    
-    print("Collecting features...")
-    with torch.no_grad():
-        for images, labels, _ in data_loader:
-            images = images.to(device)
-            _, features = model(images, return_features=True)
-            features_list.append(features.cpu())
-            labels_list.append(labels)
-    
-    features = torch.cat(features_list)
-    labels = torch.cat(labels_list)
-    
-    return features, labels
-
 if __name__ == "__main__":
-    from train import GameDataset
-    import torchvision.transforms as transforms
-    from utils.data_stats import load_dataset_stats
-    
     # 设置设备
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    # 加载数据集统计信息
-    mean, std = load_dataset_stats()
+    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/resnet50_99.92.pth', model_type='resnet50', batch_size=128)
     
-    # 定义数据预处理
-    transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=mean, std=std)
-    ])
-    # # 加载训练数据集
-    train_dataset = GameDataset(
-        data_dir='jk_zfls/round0_train',
-        num_labels=20,
-        transform=transform
-    )
-    train_loader = DataLoader(
-        train_dataset,
-        batch_size=400,
-        shuffle=False,  # 设为False以保持数据顺序
-        num_workers=4,
-        pin_memory=True
-    )
     ## 加载特征
-    features, labels = load_features_labels(
-        model_path='models/best_model_99.75_01.pth',
-        data_loader=train_loader,
+    print("Collecting features of training set...")
+    features, labels = collect_features(
+        model=model,
+        loader=train_loader,
         device=device
     )
     
-    # eval_dataset = GameDataset(
-    #     data_dir='jk_zfls/round0_eval',
-    #     num_labels=21,
-    #     transform=transform
-    # )
-    # eval_loader = DataLoader(
-    #     eval_dataset,
-    #     batch_size=400,
-    #     shuffle=False,
-    # )
-    # features, labels = load_features_labels(
-    #     model_path='models/best_model_99.75_01.pth',
-    #     data_loader=eval_loader,
-    #     device=device
-    # )
+    print("Collecting features of validation set...")
+    val_features, val_labels = collect_features(
+        model=model,
+        loader=val_loader,
+        device=device
+    )
     # 可视化特征
     # print("Visualizing features using t-SNE...")
     # visualize_features(
@@ -204,6 +130,14 @@ if __name__ == "__main__":
         features=features,
         labels=labels,
         method='umap',
-        save_path='outputs/train_dataset_features.png',
+        save_path='outputs/resnet50_train_FeatureMap.png',
         include_unknown=False
+    )
+    
+    visualize_features(
+        features=val_features,
+        labels=val_labels,
+        method='umap',
+        save_path='outputs/resnet50_val_FeatureMap.png',
+        include_unknown=True
     )

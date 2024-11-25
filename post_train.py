@@ -1,6 +1,6 @@
 import torch
 from torch.utils.data import DataLoader
-from models.resnet import resnet18
+from models.resnet import resnet18, resnet34, resnet50
 from models.openmax import OpenMax
 from models.metamax import MetaMax
 from train import GameDataset
@@ -9,7 +9,7 @@ from torchvision import transforms
 from utils.data_stats import load_dataset_stats
 from pprint import pprint
 
-def prepare_data_and_model(model_path='models/best_model.pth'):
+def prepare_data_and_model(model_path='models/best_model.pth', model_type='resnet18', batch_size=400):
     """准备数据和模型"""
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -24,14 +24,19 @@ def prepare_data_and_model(model_path='models/best_model.pth'):
     train_dataset = GameDataset('jk_zfls/round0_train', num_labels=20, transform=transform)
     val_dataset = GameDataset('jk_zfls/round0_eval', num_labels=21, transform=transform)
     
-    batch_size = 400
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False, 
                             num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, 
                         num_workers=4, pin_memory=True)
     
     # 加载预训练模型
-    model = resnet18(num_classes=20)
+    if model_type == 'resnet18':
+        model = resnet18(num_classes=20)
+    elif model_type == 'resnet34':
+        model = resnet34(num_classes=20)
+    elif model_type == 'resnet50':
+        model = resnet50(num_classes=20)
+        
     checkpoint = torch.load(model_path)
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
@@ -45,7 +50,6 @@ def collect_features(model, loader, device, return_logits=False):
     logits_list = []
     labels_list = []
     
-    print("Collecting features and logits from training set...")
     with torch.no_grad():
         for images, labels, paths in loader:
             images = images.to(device)
@@ -68,11 +72,11 @@ def train_openmax(features,labels, model, val_loader, device, fraction=0.2):
     """
     # OpenMax特定的超参数搜索空间
     # alpha_range = [3, 5, 8, 12, 16, 20]
-    alpha_range = [15, 16, 17, 18, 19, 20]
+    alpha_range = [12, 13, 14, 15, 16, 17, 18, 19, 20]
     # tailsize_range = [10, 15, 20, 25, 30]
-    tailsize_range = [10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
-    # multiplier_range = [0.5, 0.6, 0.7, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5]
-    multiplier_range = [0.3, 0.4, 0.5, 0.6, 0.7]
+    tailsize_range = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    # multiplier_range = [0.5, 0.75, 1, 1.25, 1.5]
+    multiplier_range = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     
     best_params = {
         'alpha': None,
@@ -81,7 +85,7 @@ def train_openmax(features,labels, model, val_loader, device, fraction=0.2):
         'accuracy': .0,
         'model': None
     }
-    val_features, val_logits, val_labels = collect_features(model, val_loader, device)
+    val_features, val_logits, val_labels = collect_features(model, val_loader, device, return_logits=True)
     print("\n=== Training OpenMax ===")
     for alpha in alpha_range:
         for tailsize in tailsize_range:
@@ -91,7 +95,6 @@ def train_openmax(features,labels, model, val_loader, device, fraction=0.2):
             openmax.fit(features, labels)
             print(f"Training finished, evaluating...")
             for multiplier in multiplier_range:
-                print(f"Evaluating with multiplier={multiplier}")
                 overall_acc, known_acc, unknown_acc = evaluate_openmax(
                     openmax, val_features, val_logits, val_labels, multiplier=multiplier, fraction=fraction, verbose=False
                 )
@@ -167,7 +170,7 @@ def train_metamax(features, labels, model, val_loader, device):
 
 if __name__ == '__main__':
     # 准备数据和模型
-    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/best_model_99.92_02.pth')
+    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/resnet50_99.92.pth', model_type='resnet50', batch_size=128)
     
     # 收集特征
     features, labels = collect_features(model, train_loader, device, return_logits=False)
@@ -176,8 +179,8 @@ if __name__ == '__main__':
     best_openmax_params = train_openmax(features, labels, model, val_loader, device)
     print("\nSaving OpenMax model...")
     pprint(best_openmax_params)
-    torch.save(best_openmax_params['model'], 'models/best_openmax.pth')
-    print(f"OpenMax model saved to models/best_openmax.pth")
+    torch.save(best_openmax_params['model'], f'models/resnet50_openmax_{best_openmax_params["accuracy"]:.2f}.pth')
+    print(f"OpenMax model saved to models/resnet50_openmax_{best_openmax_params['accuracy']:.2f}.pth")
 
     # 训练MetaMax
     # best_metamax_params = train_metamax(features, labels, model, val_loader, device)

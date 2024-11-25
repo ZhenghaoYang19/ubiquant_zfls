@@ -2,99 +2,23 @@ import socketio
 import time
 import numpy as np
 import os
-from pprint import pprint
 import socketio.exceptions
-import torch
-from models.resnet import resnet18
-from torchvision import transforms
-from utils.data_stats import load_dataset_stats, calculate_dataset_stats
-from torch.utils.data import Dataset, DataLoader
-from PIL import Image
+from models.resnet import ImageClassifier
+from search import search
 
-class ImageClassifier:
-    def __init__(self):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        images_path = os.path.join('jk_zfls', 'round0_train')
-        # 尝试加载已保存的数据集统计信息，如果不存在则重新计算
-        try:
-            self.mean, self.std = load_dataset_stats()
-            print("Loaded pre-calculated dataset statistics")
-        except FileNotFoundError:
-            print("FileNotFound, Calculating dataset statistics...")
-            self.mean, self.std = calculate_dataset_stats(images_path)
-        # 定义图像变换
-        self.transform = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Normalize(mean=self.mean, std=self.std)
-        ])
-        
-        # 加载模型
-        self.model = resnet18(num_classes=20)
-        checkpoint = torch.load('models/best_model_99.92_02.pth')
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.model = self.model.to(self.device)
-        self.model.eval()
-        
-        # 加载OpenMax模型
-        self.openmax = torch.load('models/best_openmax_95.62_02.pth')
-        self.multiplier = 0.5
-        
-    def resnet_predict(self, patches):
-        """
-        仅使用ResNet模型预测图像块的类别（不使用MetaMax）
-        Args:
-            patches: shape (N, 50, 50, 3) 的torch tensor
-        Returns:
-            predictions: shape (N,) 的类别预测结果
-        """
-        # 创建数据集和数据加载器
-        dataset = PatchDataset(patches, transform=self.transform)
-        dataloader = DataLoader(dataset, batch_size=256, shuffle=False, num_workers=4, pin_memory=True)
-        
-        predictions = []
-        with torch.no_grad():
-            for batch in dataloader:
-                # 移动到设备
-                batch = batch.to(self.device)
-                
-                # 获取logits并直接预测
-                logits, _ = self.model(batch, return_features=True)
-                _, batch_predictions = logits.max(1)
-                predictions.append(batch_predictions.cpu())
-        
-        return torch.cat(predictions)
+actions = []
+def action_policy(grid=None, loc=None, rounds=0):
+    """
+    Args:
+        grid: 当前网格状态
+        loc: 当前位置
+        rounds: 当前回合数
+    Returns:
+        action: 下一步动作
+    """
+    # 第0回合时计算整个行动序列
     
-    def predict(self, patches):
-        """
-        使用OpenMax预测图像块的类别
-        Args:
-            patches: shape (N, 50, 50, 3) 的numpy array
-        Returns:
-            predictions: shape (N,) 的类别预测结果
-        """
-        # 直接将整个batch转换为tensor并归一化
-        patches_tensor = torch.from_numpy(patches).float().permute(0, 3, 1, 2) / 255.0  # (N,3,50,50)
-        patches_tensor = transforms.Normalize(mean=self.mean, std=self.std)(patches_tensor)
-        patches_tensor = patches_tensor.to(self.device)
-        
-        with torch.no_grad():
-            # 获取特征和logits
-            logits, features = self.model(patches_tensor, return_features=True)
-            
-            # 使用OpenMax进行预测
-            openmax_probs = self.openmax.predict(features, logits, multiplier=self.multiplier)
-            predictions = torch.argmax(openmax_probs, dim=1)
-
-        return predictions, openmax_probs
-
-
-def action_policy(action_shape):
-    # 0: down, loc+=[1,0]
-    # 1: right, loc+=[0,1]
-    # 2: up, loc+=[-1,0]
-    # 3: left, loc+=[0,-1]
-    # 4: collect
-    return np.random.randint(action_shape)
+    return None
 
 def recognition(img):
     """
@@ -104,7 +28,7 @@ def recognition(img):
         grid: (12,12) 的numpy数组
     """
     if not hasattr(recognition, 'classifier'):
-        recognition.classifier = ImageClassifier()
+        recognition.classifier = ImageClassifier(model_type='resnet50', model_path='models/resnet50_99.92.pth', openmax_path='models/resnet50_openmax_95.03.pth', multiplier=0.6)
     
     # 先转换为numpy数组
     img = np.array(img, dtype=np.uint8)
@@ -169,6 +93,10 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
                         grid, openmax_probs = recognition(data['img'])
                         print('Recognition Finished!')
                         send_data['grid_pred'] = grid.tolist()
+                        
+                    # 使用 search 函数替代直接使用 Algorithm_Agent
+                    actions[:] = search(grid=grid, loc=loc, pred_grid=grid, pred_loc=loc)
+                
                 score_npy = f'./{data["team_id"]}/{data["game_id"]}_score.npy'
                 if os.path.exists(score_npy):
                     prev_score = np.load(score_npy)
@@ -181,7 +109,7 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
                         print(f'Recognition acc on this game fig: {data["acc"]}')
                     sio.disconnect()
                 else:
-                    action = action_policy(5)
+                    action = actions.pop(0)
                     if action == 4:
                         grid[loc[0], loc[1]] = -1
                     send_data['action'] = action
@@ -219,7 +147,7 @@ if __name__ == '__main__':
     
     # 初赛的第1阶段，game_data_id  must be in ['00000', '00001', ..., '00099']
     # 初赛的终榜阶段，game_data_id  must be in ['00000', '00001', ..., '00199']
-    game_data_id = [f'{i:05}' for i in range(0, 40)]
+    game_data_id = [f'{i:05}' for i in range(1, 2)]
     st = time.time()
     for gdi in game_data_id:
         team_play_game(team_id, game_type, gdi, ip, port)

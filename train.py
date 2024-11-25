@@ -7,13 +7,14 @@ import os
 import numpy as np
 import wandb
 from PIL import Image
-from models.resnet import resnet18
+from models.resnet import resnet18, resnet34, resnet50
 from models.openmax import OpenMax
-from models.metamax import MetaMax
+# from models.metamax import MetaMax
 from utils.data_stats import calculate_dataset_stats, load_dataset_stats
 from utils.eval_utils import evaluate_known_classes, evaluate_openmax, evaluate_metamax
 from pprint import pprint
 import math
+
 
 class GameDataset(Dataset):
     def __init__(self, data_dir, num_labels=20, transform=None):
@@ -66,7 +67,8 @@ class GameDataset(Dataset):
 
 
 
-def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate = 0.3, patience = 10):
+def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate = 0.3, patience = 10, model_type='resnet34'):
+    from post_train import collect_features
     os.makedirs('models', exist_ok=True)
     os.makedirs('wandb_logs', exist_ok=True)
     images_path = os.path.join('jk_zfls', 'round0_train')
@@ -80,12 +82,12 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
         
     wandb.init(
         project="jk_zfls",
-        name="resnet18-openmax-training",
+        name=f"{model_type}-training",
         config={
             "learning_rate": learning_rate,
             "batch_size": batch_size,
             "epochs": num_epochs,
-            "model": "resnet18-openmax",
+            "model": f"{model_type}",
             "num_classes": 20
         },
         dir="./wandb_logs"
@@ -93,14 +95,18 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
+    # 计算填充值 (将均值从[0,1]转换为[0,255])
+    fill_value = tuple(int(x * 255) for x in mean)
+    
     # 增加数据增强
     transform = transforms.Compose([
         transforms.ToTensor(),
-        # transforms.RandomAffine(
-        #     degrees=[-15, 15],                      # 限制旋转角度在±15度以内
-        #     translate=(0.1, 0.1),                   # 在水平和垂直方向上最多移动10%的图像大小
-        #     fill=255                                # 填充白色（使用 fill 而不是 fillcolor）
-        # ),
+        transforms.RandomAffine(
+            degrees=15,
+            translate=(0.1, 0.1),
+            scale=(0.9, 1.1),
+            fill=fill_value  # 使用数据集的均值作为填充值
+        ),
         transforms.Normalize(mean=mean, std=std)
     ])
     
@@ -117,29 +123,47 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
     
+    # 根据选择加载不同的模型
+    if model_type == 'resnet18':
+        model = resnet18(num_classes=20, dropout_rate=dropout_rate)
+    elif model_type == 'resnet34':
+        model = resnet34(num_classes=20, dropout_rate=dropout_rate)
+    elif model_type == 'resnet50':
+        model = resnet50(num_classes=20, dropout_rate=dropout_rate)
+    else:
+        raise ValueError(f"Unsupported model type: {model_type}")
+        
     # 加载模型（和已有参数）
-    model = resnet18(num_classes=20, dropout_rate=dropout_rate)
-    checkpoint = torch.load('models/best_model_99.75.pth')
-    model.load_state_dict(checkpoint['model_state_dict'])
+    # checkpoint = torch.load('models/best_model_99.75.pth')
+    # model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
     
     # 定义损失函数和优化器，使用更小的学习率
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate * 0.1, weight_decay=1e-4)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate * 0.1, weight_decay=1e-3)
     
     # optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
     # 使用带 warmup 的 cosine 调度器
     num_training_steps = len(train_loader) * num_epochs
-    num_warmup_steps = len(train_loader) * 2      # 2个epoch的warmup
+    num_warmup_steps = len(train_loader) * 5      # 5个epoch的warmup
     
-    def warmup_cosine_schedule(step):
-        if step < num_warmup_steps:
-            return float(step) / float(max(1, num_warmup_steps))
-        progress = float(step - num_warmup_steps) / float(max(1, num_training_steps - num_warmup_steps))
-        return 0.5 * (1.0 + math.cos(math.pi * progress))
-    
-    scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, warmup_cosine_schedule)
+    # 定义warmup调度器和ReduceLROnPlateau调度器
+    warmup_scheduler = optim.lr_scheduler.LinearLR(
+        optimizer,
+        start_factor=0.1,  # 从0.1倍的学习率开始
+        end_factor=1.0,    # 最终达到设定的学习率
+        total_iters=num_warmup_steps
+    )
+
+    reduce_scheduler = optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode='max',
+        factor=0.5,
+        patience=5,
+        verbose=True,
+        min_lr=1e-6
+    )
 
     patience_counter = 0  # 计数器，记录连续没有提升的轮数
     best_params = {
@@ -167,6 +191,10 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
             
             if batch_idx % 10 == 0:
                 print(f'Epoch: {epoch}, Batch: {batch_idx}, Loss: {loss.item():.4f}')
+            
+            # 在warmup阶段更新学习率
+            if epoch * len(train_loader) + batch_idx < num_warmup_steps:
+                warmup_scheduler.step()
         
         train_loss = total_loss / len(train_loader)
         
@@ -184,8 +212,12 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
         print(f'Epoch {epoch}:')
         print(f'Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Val Accuracy = {val_acc:.2f}%')
         
-        # 更新学习率
-        scheduler.step()
+        # 验证阶段后更新ReduceLROnPlateau
+        reduce_scheduler.step(val_acc)
+        
+        # 打印当前学习率
+        current_lr = optimizer.param_groups[0]['lr']
+        print(f'Current learning rate: {current_lr:.2e}')
         
         # 记录最佳模型（基于验证集准确率）
         if val_acc > best_params['best_val_acc']:
@@ -213,40 +245,33 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     
     # 训练完成后，保存最佳模型的参数
     print("Saving best model parameters...")
-    torch.save(best_params, 'models/best_model.pth')
+    torch.save(best_params, f'models/{model_type}_{best_params["best_val_acc"]:.2f}.pth')
     
     # 使用最佳模型收集features
     print("Collecting features from best model for OpenMax/MetaMax training...")
     model.load_state_dict(best_params['model_state_dict'])
     model.eval()
-    features_list = []
-    labels_list = []
-    
-    with torch.no_grad():
-        for images, labels, paths in train_loader:
-            images = images.to(device)
-            _, features = model(images, return_features=True)  # 获取features
-            features_list.append(features)
-            labels_list.append(labels)
-    
-    features = torch.cat(features_list)
-    labels = torch.cat(labels_list)
+    features, labels = collect_features(model, train_loader, device, return_logits=False)
     
     # 训练OpenMax/MetaMax
     openmax = OpenMax(num_classes=20)
-    metamax = MetaMax(num_classes=20)
-    
     openmax.fit(features, labels)
-    metamax.fit(features, labels)
+    
+    # metamax = MetaMax(num_classes=20)
+    # metamax.fit(features, labels)
     
     # 保存模型
     torch.save(openmax, 'models/openmax.pth')
-    torch.save(metamax, 'models/metamax.pth')
+    # torch.save(metamax, 'models/metamax.pth')
     print("OpenMax and MetaMax models saved")
     # 在训练完OpenMax后添加评估
-    evaluate_openmax(openmax, model, val_loader, device)
-    evaluate_metamax(metamax, model, val_loader, device)
+    print("Evaluating OpenMax and MetaMax...")
+    val_features, val_logits, val_labels = collect_features(model, val_loader, device, return_logits=True)
+
+    overall_acc, known_acc, unknown_acc = evaluate_openmax(openmax, val_features, val_logits, val_labels, multiplier=0.5)
+    print(f"Multiplier: 0.5, Overall Accuracy: {overall_acc:.2f}%")
+    # evaluate_metamax(metamax, val_features, val_labels, device)
     wandb.finish()
 
 if __name__ == '__main__':
-    train(num_epochs=100, batch_size=64, learning_rate=0.001, dropout_rate=0.3, patience=20)
+    train(num_epochs=100, batch_size=64, learning_rate=0.001, dropout_rate=0.3, patience=20, model_type='resnet50')
