@@ -2,9 +2,7 @@ import numpy as np
 import itertools
 import random
 from make_env import GridWorldEnv
-from concurrent.futures import ThreadPoolExecutor
-import multiprocessing
-import copy
+from concurrent.futures import ProcessPoolExecutor
 
 class Algorithm_Agent():
     def __init__(self, num_categories, grid_size, grid, loc):
@@ -67,7 +65,11 @@ class Algorithm_Agent():
                 best_position = i
         return best_position
 
-    def try_single_optimization(self, path, category_path):
+    def try_single_optimization(self, args):
+        """
+        将函数改造为接收单个参数的形式，便于进程池调用
+        """
+        path, category_path = args
         path = path.copy()
         category_path = category_path.copy()
         
@@ -84,7 +86,38 @@ class Algorithm_Agent():
         path.insert(position, point)
         category_path.insert(position, category)
         
-        return path, category_path, self.calculate_length(path, category_path, self.get_elim_path(category_path))
+        return (path, category_path, 
+                self.calculate_length(path, category_path, self.get_elim_path(category_path)))
+
+    def optimize_path_parallel(self, initial_path, initial_category_path, num_iterations=1000):
+        """
+        新增的并行优化函数
+        """
+        chunk_size = 125
+        num_processes = num_iterations // chunk_size
+
+        # 准备参数
+        args_list = [(initial_path.copy(), initial_category_path.copy()) 
+                    for _ in range(num_iterations)]
+        
+        best_path, best_category_path = initial_path.copy(), initial_category_path.copy()
+        best_length = float('inf')
+        
+        # 使用进程池
+        with ProcessPoolExecutor(max_workers=num_processes) as executor:
+            # 并行执行优化
+            results = list(executor.map(self.try_single_optimization, 
+                                    args_list, 
+                                    chunksize=chunk_size))
+            
+            # 找出最佳结果
+            for path, category_path, length in results:
+                if length < best_length:
+                    best_length = length
+                    best_path = path
+                    best_category_path = category_path
+        
+        return best_path, best_category_path
 
     def arrange_points(self):
         points_by_category = {i: [] for i in random.sample(range(self.num_categories), self.num_categories)}  # Group points by category
@@ -127,38 +160,10 @@ class Algorithm_Agent():
         #     path.insert(position, point)
         #     category_path.insert(position, category)
             
-        # 并行优化路径
-        num_threads = multiprocessing.cpu_count()
-        iterations_per_thread = 1000 // num_threads
-        best_path, best_category_path = path.copy(), category_path.copy()
-        best_length = float('inf')
-
-        with ThreadPoolExecutor(max_workers=num_threads) as executor:
-            futures = []
-            for _ in range(num_threads):
-                # 为每个线程创建独立的路径副本
-                path_copy = path.copy()
-                category_path_copy = category_path.copy()
-                
-                # 提交多个优化任务
-                for _ in range(iterations_per_thread):
-                    futures.append(
-                        executor.submit(
-                            self.try_single_optimization, 
-                            path_copy, 
-                            category_path_copy
-                        )
-                    )
-            
-            # 收集结果并找到最优解
-            for future in futures:
-                new_path, new_category_path, length = future.result()
-                if length < best_length:
-                    best_length = length
-                    best_path = new_path
-                    best_category_path = new_category_path
-
-        return best_path, best_category_path
+        # 使用并行优化替换原来的循环
+        path, category_path = self.optimize_path_parallel(path, category_path)
+        
+        return path, category_path
     
     def plan_action(self):
         actions = []
@@ -193,8 +198,8 @@ def search(grid, loc, pred_grid, pred_loc, num_iterations=30):
             cumulated_reward += reward
         if cumulated_reward > optim_reward:
             optim_actions, optim_reward = agent.actions, cumulated_reward
-        print(cumulated_reward)
-    print(optim_reward)
+        print(f'{i}:', cumulated_reward)
+    print(f'Optim reward: {optim_reward}')
     return optim_actions
 
 
