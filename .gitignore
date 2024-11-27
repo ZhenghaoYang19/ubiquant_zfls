@@ -3,3 +3,4 @@
 __pycache__
 wandb/
 ewv9ssdcuvg6/
+*.pth
