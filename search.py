@@ -1,123 +1,93 @@
+from make_env import GridWorldEnv
+import matplotlib.pyplot as plt
 import numpy as np
 import itertools
 import random
-from make_env import GridWorldEnv
-from concurrent.futures import ProcessPoolExecutor
+import concurrent.futures
+# np.random.seed(0)
 
 class Algorithm_Agent():
     def __init__(self, num_categories, grid_size, grid, loc):
         self.num_categories = num_categories
         self.grid_size = grid_size
         self.grid = grid
+        self.loc = loc
         self.current_loc = [loc[0], loc[1]]
         self.path, self.path_category = self.arrange_points()
         # print('Path generated.')
         self.actions = self.plan_action()
         # print('Actions generated.')
     
-    def calculate_length(self, path, category_path, elim_path):
-        lengths = np.sum(np.abs(np.array(path[:-1]) - np.array(path[1:])), axis=1)
-        motion_length = np.sum(lengths)  # motion path
-        cum_lengths = np.cumsum(lengths)[::-1] / 14.4  # cumulative length
-        load_length = np.sum(cum_lengths) - 4 * np.sum(np.array(cum_lengths) * np.array(elim_path[:-1]))
+    def calculate_length(self, paths, elim_paths):
+        # 计算路径长度, 输入：所有路径paths=np.array((N, L, 2))，所有消除路径elim_paths=np.array((N, L))
+        lengths = np.sum(np.abs(np.array(paths[:, :-1]) - np.array(paths[:, 1:])), axis=-1)   +1 # lengths=np.array((N, L-1))
+        motion_length = np.sum(lengths, axis=-1) + np.sum(np.abs(self.loc - paths[:, 0]), axis=-1)   +1 # motion_length=np.array((N,))
+        cum_lengths = np.flip(np.cumsum(np.flip(lengths), axis=-1)) / 14.4  # cum_lengths=np.array((N, L-1))
+        # cum_lengths = np.cumsum(lengths, axis=-1)[:, ::-1] / 14.4  # cum_lengths=np.array((N, L-1))
+        load_length = np.sum(cum_lengths, axis=-1) - 4 * np.sum(np.array(cum_lengths) * np.array(elim_paths[:, :-1]), axis=-1)  # elim_paths的最后一项不参与计算
         
         return motion_length + load_length
 
 
-    def get_elim_path(self, category_path):
-        elim_path = [0] * len(category_path)
-        for i in range(len(category_path)):
+    def get_elim_path(self, category_paths):
+        # 获取消除路径，输入：所有路径category_paths=np.array((N, L))
+        elim_path = np.zeros_like(category_paths)
+        for i in range(category_paths.shape[1]):
             if i > 0:
-                previous_caterogy_path = category_path[:i]
-                # 统计previous_caterogy_path中，与category_path[i]同一类别的元素的个数
-                same_category_count = previous_caterogy_path.count(category_path[i])
-                if (same_category_count + 1) % 4 == 0 and same_category_count != 0:
-                    elim_path[i] = 1
+                previous_caterogy_path = category_paths[:, :i]
+                # 统计previous_caterogy_path中，与category_paths[i]同一类别的元素的个数
+                same_category_count = np.sum(previous_caterogy_path == category_paths[:, i:i+1], axis=-1)
+                elim_path[:, i] = (same_category_count + 1) % 4 == 0
+        
+        # elim_path = [0] * len(category_paths)
+        # for i in range(len(category_path)):
+        #     if i > 0:
+        #         previous_caterogy_path = category_path[:i]
+        #         # 统计previous_caterogy_path中，与category_path[i]同一类别的元素的个数
+        #         same_category_count = previous_caterogy_path.count(category_path[i])
+        #         if (same_category_count + 1) % 4 == 0 and same_category_count != 0:
+        #             elim_path[i] = 1
         return elim_path
 
 
     def find_shortest_path(self, points):
         min_path = None
         min_length = float('inf')
-        for perm in itertools.permutations(points):
-            perm = np.array(perm)  # 转换为numpy数组
-            # 简化计算方式
-            diffs = np.abs(perm[1:] - perm[:-1])
-            length = np.sum(diffs)
+        for perm in itertools.permutations(points):  # Try all permutations
+            length = sum(np.sum(np.abs(np.array(perm[i]) - np.array(perm[i + 1]))) for i in range(len(perm) - 1))
             if length < min_length:
                 min_length = length
-                min_path = perm.tolist()
+                min_path = list(perm)
         return min_path, min_length
 
-    def insert_point(self, path, category_path, elim_path, point, category):
+    def insert_point(self, path, category_path, point, category):
         min_length = float('inf')
-        best_position = None
-        for i in range(len(path) + 1):
-            new_path, new_category_path = path.copy(), category_path.copy()
-            new_path.insert(i, point)
-            new_category_path.insert(i, category)
-            new_elim_path = self.get_elim_path(new_category_path)
-            if len(new_path) > 12:
-                a=1       
-            length = self.calculate_length(new_path, new_category_path, new_elim_path)
-            if length < min_length:
-                min_length = length
-                best_position = i
-        return best_position
+        best_position = range(len(path) + 1)
+        # 将point插入到path的各个位置，合并为一个矩阵np.array((N, L, 2))，L为path的长度
+        new_path = np.zeros((len(best_position), len(path) + 1, 2))
+        new_category_path = np.zeros((len(best_position), len(path) + 1))
+        for i in range(len(best_position)):
+            new_path[i] = np.insert(path, best_position[i], point, axis=0)
+            new_category_path[i] = np.insert(category_path, best_position[i], category, axis=0)
+        new_elim_path = self.get_elim_path(new_category_path)  # 获取消除路径
 
-    def try_single_optimization(self, args):
-        """
-        将函数改造为接收单个参数的形式，便于进程池调用
-        """
-        path, category_path = args
-        path = path.copy()
-        category_path = category_path.copy()
+        # 计算路径长度
+        lengths = self.calculate_length(new_path, new_elim_path)
+        min_length = np.min(lengths)
+        best_position = np.argmin(lengths)
         
-        # 随机选择一个点
-        index = random.randint(0, len(path) - 1)
-        point = path.pop(index)
-        category = category_path.pop(index)
-        
-        # 尝试重新插入
-        elim_path = self.get_elim_path(category_path)
-        position = self.insert_point(path, category_path, elim_path, point, category)
-        
-        # 插入到最优位置
-        path.insert(position, point)
-        category_path.insert(position, category)
-        
-        return (path, category_path, 
-                self.calculate_length(path, category_path, self.get_elim_path(category_path)))
-
-    def optimize_path_parallel(self, initial_path, initial_category_path, num_iterations=1000):
-        """
-        新增的并行优化函数
-        """
-        chunk_size = 125
-        num_processes = num_iterations // chunk_size
-
-        # 准备参数
-        args_list = [(initial_path.copy(), initial_category_path.copy()) 
-                    for _ in range(num_iterations)]
-        
-        best_path, best_category_path = initial_path.copy(), initial_category_path.copy()
-        best_length = float('inf')
-        
-        # 使用进程池
-        with ProcessPoolExecutor(max_workers=num_processes) as executor:
-            # 并行执行优化
-            results = list(executor.map(self.try_single_optimization, 
-                                    args_list, 
-                                    chunksize=chunk_size))
-            
-            # 找出最佳结果
-            for path, category_path, length in results:
-                if length < best_length:
-                    best_length = length
-                    best_path = path
-                    best_category_path = category_path
-        
-        return best_path, best_category_path
+        # min_length = float('inf')
+        # best_position = range(len(path) + 1)
+        # for i in range(len(path) + 1):
+        #     new_path, new_category_path = path.copy(), category_path.copy()
+        #     new_path.insert(i, point)
+        #     new_category_path.insert(i, category)
+        #     new_elim_path = self.get_elim_path(new_category_path)   
+        #     length = self.calculate_length(new_path, new_elim_path)
+        #     if length < min_length:
+        #         min_length = length
+        #         best_position = i
+        return best_position, min_length
 
     def arrange_points(self):
         points_by_category = {i: [] for i in random.sample(range(self.num_categories), self.num_categories)}  # Group points by category
@@ -127,8 +97,7 @@ class Algorithm_Agent():
                 if category != -1:
                     points_by_category[category].append([x, y])  # Store the position of the item
 
-        path = []  # Initialize the path
-        category_path = []
+        path, category_path, rewards_his = [], [], []  # Initialize the path and category path
         for category, points in points_by_category.items():  # Process each category
             while points:  # Process all points in the category
                 if len(points) >= 4:  # If there are at least 4 points, find the shortest path for the first 4 points
@@ -143,26 +112,31 @@ class Algorithm_Agent():
                     category_path = [category] * len(path)
                 else:
                     for point in subset:
-                        elim_path = self.get_elim_path(category_path)
-                        position = self.insert_point(path, category_path, elim_path, point, category)
+                        position, length = self.insert_point(path, category_path, point, category)
                         path.insert(position, point)
-                        category_path.insert(position, category)
+                        category_path.insert(position, category)             
 
             # print(f'category: {category}, category_path: {category_path}\n')
-        # # 排列好第一轮后，再次调整顺序
-        # # 从序列中随机剔除一个元素，然后插入到其他位置，使得路径长度最短
-        # for i in range(1000):
-        #     index = random.randint(0, len(path) - 1)
-        #     point = path.pop(index)
-        #     category = category_path.pop(index)
-        #     elim_path = self.get_elim_path(category_path)
-        #     position = self.insert_point(path, category_path, elim_path, point, category)
-        #     path.insert(position, point)
-        #     category_path.insert(position, category)
-            
-        # 使用并行优化替换原来的循环
-        path, category_path = self.optimize_path_parallel(path, category_path)
-        
+
+        # 排列好第一轮后，再次调整顺序
+        # 从序列中随机剔除一个元素，然后插入到其他位置，使得路径长度最短
+        for i in range(1000):
+            # # lengths = np.sum(np.abs(np.array(path[:-1]) - np.array(path[1:])), axis=1)
+            # prob = 1 * np.ones(144)
+            # # prob[:-1] += lengths
+            # # prob[1:] += lengths
+            # # prob = np.clip(prob, 0, 1)
+            # prob = prob / np.sum(prob)
+            index = np.random.randint(0, 144)
+            point = path.pop(index)
+            category = category_path.pop(index)
+            position, length = self.insert_point(path, category_path, point, category)
+            path.insert(position, point)
+            category_path.insert(position, category)
+            rewards_his.append(100 + 36 - length / 10)
+        self.cumulated_reward = rewards_his[-1]
+        # plt.plot(rewards_his)
+        # plt.show()
         return path, category_path
     
     def plan_action(self):
@@ -185,26 +159,49 @@ class Algorithm_Agent():
         # print(f'actions: {actions}\n')
         return actions
 
+def adjust_grid(predictions, openmax_probs):
+    # 根据openmax_probs调整grid的pred
+    # 遍历每一个类别，如果某个类别的个数与4的余数为3，则说明另一个类别应当被赋值为该类别。在openmax_probs中，寻找除已经分类的类别外，该类别概率最大的索引，并将其赋值为该类别
+    for i in range(20):
+        if np.sum(predictions == i) % 4 == 3:
+            indices = np.where(predictions == 20)[0]
+            max_index = np.argmax(openmax_probs[indices, i])
+            predictions[indices[max_index]] = i
+    grid = predictions.astype(np.int64).reshape(12, 12)
+
+    return grid
+
+def search_once(grid, loc):
+    agent = Algorithm_Agent(21, (12, 12), grid, loc)
+    return agent.actions, agent.cumulated_reward
+
+# 使用 ProcessPoolExecutor 并行运行 30 个 search
 def search(grid, loc, pred_grid, pred_loc, num_iterations=30):
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_iterations) as executor:
+        futures = [executor.submit(search_once, pred_grid.copy(), pred_loc.copy()) for _ in range(num_iterations)]
+        results = [future.result() for future in concurrent.futures.as_completed(futures)]
+
+    # 选择最优的结果
+    for i, result in enumerate(results):
+        if i % 5 == 0:
+            print(f"Iteration {i}: {result[1]}")
+    optim_actions, optim_reward = max(results, key=lambda x: x[1])
+
+    # 在env中测试optim_actions
     env = GridWorldEnv()
-    optim_actions, optim_reward = None, 0
-    for i in range(num_iterations):
-        env.reset()
-        env.grid, env.loc = grid.copy(), loc.copy()
-        agent = Algorithm_Agent(env.num_categories, env.grid_size, pred_grid, pred_loc)
-        cumulated_reward = 0
-        for action in agent.actions:
-            obs, reward, done, truncated, info = env.step(action)
-            cumulated_reward += reward
-        if cumulated_reward > optim_reward:
-            optim_actions, optim_reward = agent.actions, cumulated_reward
-        print(f'{i}:', cumulated_reward)
-    print(f'Optim reward: {optim_reward}')
+    cumulated_reward = 0
+    env.reset()
+    env.grid, env.loc = grid.copy(), loc.copy()
+    for action in optim_actions:
+        obs, reward, done, truncated, info = env.step(action)
+        cumulated_reward += reward
+    print(f'Final reward: {cumulated_reward}')
+
     return optim_actions
 
 
 if __name__ == "__main__":
-    for _ in range(20):
+    for _ in range(1):
         test_env = GridWorldEnv()
         test_env.reset()
         grid, loc = test_env.grid.copy(), test_env.loc.copy()
@@ -213,3 +210,4 @@ if __name__ == "__main__":
         a, b, c, d, e = pred_grid[loc_1[0], loc_1[1]], pred_grid[loc_2[0], loc_2[1]], pred_grid[loc_3[0], loc_3[1]], pred_grid[loc_4[0], loc_4[1]], pred_grid[loc_5[0], loc_5[1]]
         pred_grid[loc_1[0], loc_1[1]], pred_grid[loc_2[0], loc_2[1]], pred_grid[loc_3[0], loc_3[1]], pred_grid[loc_4[0], loc_4[1]], pred_grid[loc_5[0], loc_5[1]] = b, e, a, c, d
         search(grid, loc, pred_grid, pred_loc)  # 使用5格混淆的grid进行搜索
+

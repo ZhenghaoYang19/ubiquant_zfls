@@ -4,7 +4,7 @@ import numpy as np
 import os
 import socketio.exceptions
 from models.resnet import ImageClassifier
-from search import search
+from search import search, adjust_grid
 
 actions = []
 def action_policy(grid=None, loc=None, rounds=0):
@@ -28,7 +28,7 @@ def recognition(img):
         grid: (12,12) 的numpy数组
     """
     if not hasattr(recognition, 'classifier'):
-        recognition.classifier = ImageClassifier(model_type='resnet50', model_path='models/resnet50_99.92.pth', openmax_path='models/resnet50_openmax_95.03.pth', multiplier=0.6)
+        recognition.classifier = ImageClassifier(model_type='resnet18', model_path='models/best_model_99.92_02.pth', openmax_path='models/best_openmax_95.62_02.pth', multiplier=0.6)
     
     # 先转换为numpy数组
     img = np.array(img, dtype=np.uint8)
@@ -46,9 +46,12 @@ def recognition(img):
     # predictions = recognition.classifier.resnet_predict(patches)
     predictions, openmax_probs = recognition.classifier.predict(patches)
     # 重塑为12x12网格
-    grid = predictions.reshape(12, 12)
-    
-    return grid.cpu().numpy(), openmax_probs
+    grid = adjust_grid(predictions.cpu().numpy(), openmax_probs.cpu().numpy())
+    # rows_without_high_confidence = np.all(openmax_probs < 0.9, axis=1)
+    # indices = np.where(rows_without_high_confidence)[0]
+    # class_counts = np.bincount(grid.flatten(), minlength=21)
+
+    return grid, openmax_probs
 
 
 def team_play_game(team_id, game_type, game_data_id, ip, port):
@@ -57,11 +60,11 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
     begin = game_type + game_data_id
     @sio.event
     def connect():
-        # print(f"Connected to server, game_type: {game_type}, game data id: {begin}")
+        print(f"Connected to server, game_type: {game_type}, game data id: {begin}")
         pass
     @sio.event
     def disconnect():
-        # print(f"End game {begin}, disconnected from server")
+        print(f"End game {begin}, disconnected from server")
         pass
     @sio.event
     def connect_error(data):
@@ -95,7 +98,7 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
                         send_data['grid_pred'] = grid.tolist()
                         
                     # 使用 search 函数替代直接使用 Algorithm_Agent
-                    actions[:] = search(grid=grid, loc=loc, pred_grid=grid, pred_loc=loc)
+                    actions[:] = search(grid=grid, loc=loc, pred_grid=grid, pred_loc=loc)[:]
                 
                 score_npy = f'./{data["team_id"]}/{data["game_id"]}_score.npy'
                 if os.path.exists(score_npy):
@@ -107,6 +110,7 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
                     print(f"Team {data['team_id']} end game {data['game_id']}, cum_score: {prev_score + score:.2f}")
                     if game_type == '2':
                         print(f'Recognition acc on this game fig: {data["acc"]}')
+                    print(f'time penalty:{data["time penalty"]}')
                     sio.disconnect()
                 else:
                     action = actions.pop(0)
@@ -134,7 +138,7 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
         print(f'Exception: {e}')
         sio.disconnect()
     finally:
-        #print('end team play game')
+        print('end team play game')
         pass
 
 
@@ -147,7 +151,7 @@ if __name__ == '__main__':
     
     # 初赛的第1阶段，game_data_id  must be in ['00000', '00001', ..., '00099']
     # 初赛的终榜阶段，game_data_id  must be in ['00000', '00001', ..., '00199']
-    game_data_id = [f'{i:05}' for i in range(6, 10)]
+    game_data_id = [f'{i:05}' for i in range(1)]
     st = time.time()
     for gdi in game_data_id:
         team_play_game(team_id, game_type, gdi, ip, port)
