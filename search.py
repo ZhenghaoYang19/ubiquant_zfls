@@ -162,26 +162,8 @@ class Algorithm_Agent():
 def adjust_grid(predictions, openmax_probs):
     # predictions = predictions.copy()
     
-    # 第一步：统计每个类别的数量
+    # 统计每个类别的数量
     class_counts = np.bincount(predictions, minlength=21)
-    
-    # 处理数量为3的类别
-    for category in range(20):
-        if class_counts[category] % 4 == 3:
-            # 找出所有不属于当前类别的样本索引
-            other_indices = np.where(predictions != category)[0]
-            if len(other_indices) == 0:
-                continue
-            
-            # 在其他所有样本中找出对当前类别概率最高的样本
-            category_probs = openmax_probs[other_indices, category]
-            best_idx = other_indices[np.argmax(category_probs)]
-            
-            # 更新计数
-            # class_counts[predictions[best_idx]] -= 1
-            # class_counts[category] += 1
-            # 将其转换为当前类别
-            predictions[best_idx] = category
     
     # 处理数量为1的类别
     for category in range(20):
@@ -201,10 +183,29 @@ def adjust_grid(predictions, openmax_probs):
             new_category = np.argmax(other_probs)
             
             # 更新计数
-            # class_counts[category] -= 1
-            # class_counts[new_category] += 1
+            class_counts[category] -= 1
+            class_counts[new_category] += 1
             # 将其转换为新类别
             predictions[worst_idx] = new_category
+            
+    # 处理数量为3的类别
+    for category in range(20):
+        if class_counts[category] % 4 == 3:
+            # 找出所有不属于当前类别的样本索引
+            other_indices = np.where(predictions != category)[0]
+            if len(other_indices) == 0:
+                continue
+            
+            # 在其他所有样本中找出对当前类别概率最高的样本
+            category_probs = openmax_probs[other_indices, category]
+            best_idx = other_indices[np.argmax(category_probs)]
+            
+            # 更新计数
+            class_counts[predictions[best_idx]] -= 1
+            class_counts[category] += 1
+            # 将其转换为当前类别
+            predictions[best_idx] = category
+    
     
     grid = predictions.reshape(12, 12)
     return grid
