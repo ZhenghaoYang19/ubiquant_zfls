@@ -64,7 +64,7 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
         pass
     @sio.event
     def disconnect():
-        print(f"End game {begin}, disconnected from server")
+        # print(f"End game {begin}, disconnected from server")
         pass
     @sio.event
     def connect_error(data):
@@ -138,7 +138,7 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
         print(f'Exception: {e}')
         sio.disconnect()
     finally:
-        print('end team play game')
+        # print('end team play game')
         pass
 
 
@@ -151,7 +151,7 @@ if __name__ == '__main__':
     
     # 初赛的第1阶段，game_data_id  must be in ['00000', '00001', ..., '00099']
     # 初赛的终榜阶段，game_data_id  must be in ['00000', '00001', ..., '00199']
-    game_data_id = [f'{i:05}' for i in range(1)]
+    game_data_id = [f'{i:05}' for i in range(50, 100)]
     st = time.time()
     for gdi in game_data_id:
         team_play_game(team_id, game_type, gdi, ip, port)

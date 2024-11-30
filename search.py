@@ -160,15 +160,53 @@ class Algorithm_Agent():
         return actions
 
 def adjust_grid(predictions, openmax_probs):
-    # 根据openmax_probs调整grid的pred
-    # 遍历每一个类别，如果某个类别的个数与4的余数为3，则说明另一个类别应当被赋值为该类别。在openmax_probs中，寻找除已经分类的类别外，该类别概率最大的索引，并将其赋值为该类别
-    for i in range(20):
-        if np.sum(predictions == i) % 4 == 3:
-            indices = np.where(predictions == 20)[0]
-            max_index = np.argmax(openmax_probs[indices, i])
-            predictions[indices[max_index]] = i
-    grid = predictions.astype(np.int64).reshape(12, 12)
-
+    # predictions = predictions.copy()
+    
+    # 第一步：统计每个类别的数量
+    class_counts = np.bincount(predictions, minlength=21)
+    
+    # 处理数量为3的类别
+    for category in range(20):
+        if class_counts[category] % 4 == 3:
+            # 找出所有不属于当前类别的样本索引
+            other_indices = np.where(predictions != category)[0]
+            if len(other_indices) == 0:
+                continue
+            
+            # 在其他所有样本中找出对当前类别概率最高的样本
+            category_probs = openmax_probs[other_indices, category]
+            best_idx = other_indices[np.argmax(category_probs)]
+            
+            # 更新计数
+            # class_counts[predictions[best_idx]] -= 1
+            # class_counts[category] += 1
+            # 将其转换为当前类别
+            predictions[best_idx] = category
+    
+    # 处理数量为1的类别
+    for category in range(20):
+        if class_counts[category] % 4 == 1:
+            # 找出该类别的样本
+            category_indices = np.where(predictions == category)[0]
+            if len(category_indices) == 0:
+                continue
+            
+            # 在该类别中找出概率最小的样本
+            category_probs = openmax_probs[category_indices, category]
+            worst_idx = category_indices[np.argmin(category_probs)]
+            
+            # 找出该样本在其他类别中概率最大的类别
+            other_probs = openmax_probs[worst_idx]
+            other_probs[category] = -1  # 排除当前类别
+            new_category = np.argmax(other_probs)
+            
+            # 更新计数
+            # class_counts[category] -= 1
+            # class_counts[new_category] += 1
+            # 将其转换为新类别
+            predictions[worst_idx] = new_category
+    
+    grid = predictions.reshape(12, 12)
     return grid
 
 def search_once(grid, loc):
@@ -182,9 +220,9 @@ def search(grid, loc, pred_grid, pred_loc, num_iterations=30):
         results = [future.result() for future in concurrent.futures.as_completed(futures)]
 
     # 选择最优的结果
-    for i, result in enumerate(results):
-        if i % 5 == 0:
-            print(f"Iteration {i}: {result[1]}")
+    # for i, result in enumerate(results):
+    #     if i % 5 == 0:
+    #         print(f"Iteration {i}: {result[1]}")
     optim_actions, optim_reward = max(results, key=lambda x: x[1])
 
     # 在env中测试optim_actions
