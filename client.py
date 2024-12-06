@@ -46,12 +46,9 @@ def recognition(img):
     # predictions = recognition.classifier.resnet_predict(patches)
     predictions, openmax_probs = recognition.classifier.predict(patches)
     # 重塑为12x12网格
-    grid = adjust_grid(predictions.cpu().numpy(), openmax_probs.cpu().numpy())
-    # rows_without_high_confidence = np.all(openmax_probs < 0.9, axis=1)
-    # indices = np.where(rows_without_high_confidence)[0]
-    # class_counts = np.bincount(grid.flatten(), minlength=21)
+    grid, probs = adjust_grid(predictions.cpu().numpy(), openmax_probs.cpu().numpy())
 
-    return grid, openmax_probs
+    return grid, probs
 
 
 def team_play_game(team_id, game_type, game_data_id, ip, port):
@@ -91,14 +88,14 @@ def team_play_game(team_id, game_type, game_data_id, ip, port):
                 send_data = {'team_id': data['team_id'], 'game_id': game_id}
                 if data['rounds']==0:
                     if (game_type == 'a'):
-                        grid = np.array(data['grid'], dtype=int)
+                        grid, probs= np.array(data['grid'], dtype=int), np.ones((12, 12))
                     if (game_type == '2'):
-                        grid, openmax_probs = recognition(data['img'])
+                        grid, probs = recognition(data['img'])
                         print('Recognition Finished!')
                         send_data['grid_pred'] = grid.tolist()
                         
                     # 使用 search 函数替代直接使用 Algorithm_Agent
-                    actions[:] = search(grid=grid, loc=loc, pred_grid=grid, pred_loc=loc)[:]
+                    actions[:] = search(grid=grid, probs=probs, loc=loc)[:]
                 
                 score_npy = f'./{data["team_id"]}/{data["game_id"]}_score.npy'
                 if os.path.exists(score_npy):
@@ -151,7 +148,8 @@ if __name__ == '__main__':
     
     # 初赛的第1阶段，game_data_id  must be in ['00000', '00001', ..., '00099']
     # 初赛的终榜阶段，game_data_id  must be in ['00000', '00001', ..., '00199']
-    game_data_id = [f'{i:05}' for i in range(50, 100)]
+    test_list = [8]
+    game_data_id = [f'{i:05}' for i in test_list]
     st = time.time()
     for gdi in game_data_id:
         team_play_game(team_id, game_type, gdi, ip, port)
