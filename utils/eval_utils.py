@@ -16,8 +16,8 @@ def evaluate_known_classes(model, data_loader, criterion, device):
             if not mask.any():
                 continue
                 
-            images = images[mask].to(device)
-            labels = labels[mask].to(device)
+            images = images[mask].to(device, non_blocking=True)
+            labels = labels[mask].to(device, non_blocking=True)
             paths = np.array(paths)[mask]
             
             logits, features = model(images, return_features=True)
@@ -50,7 +50,7 @@ def evaluate_known_classes(model, data_loader, criterion, device):
     
     return avg_loss, accuracy, errors
 
-def evaluate_openmax(openmax, features, logits, labels, threshold=0.5, fraction=None, verbose=False):
+def evaluate_openmax(openmax, features, logits, labels, threshold=0.05, fraction=None, verbose=False):
     """评估OpenMax模型性能
     Args:
         openmax: OpenMax模型实例
@@ -81,6 +81,10 @@ def evaluate_openmax(openmax, features, logits, labels, threshold=0.5, fraction=
     # 计算准确率
     known_acc = 100. * known_correct / known_total if known_total > 0 else 0
     unknown_acc = 100. * unknown_correct / unknown_total if unknown_total > 0 else 0
+    if fraction:
+        overall_acc = known_acc * (1 - fraction) + unknown_acc * fraction
+    else:
+        overall_acc = 100. * (known_correct + unknown_correct) / (known_total + unknown_total)
     if fraction:
         overall_acc = known_acc * (1 - fraction) + unknown_acc * fraction
     else:
@@ -120,8 +124,8 @@ def evaluate_metamax(metamax, model, val_loader, device, threshold=0.08, verbose
     
     with torch.no_grad():
         for images, labels, paths in val_loader:
-            images = images.to(device)
-            labels = labels.to(device)
+            images = images.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
             
             # 获取features和logits
             logits, features = model(images, return_features=True)

@@ -93,25 +93,31 @@ def train_openmax(features, labels, model, val_loader, device, threshold=0.05, f
             openmax.fit(features, labels)
             
             for threshold in threshold_range:
+            
+            for threshold in threshold_range:
                 overall_acc, known_acc, unknown_acc = evaluate_openmax(
                     openmax, val_features, val_logits, val_labels, threshold=threshold, fraction=fraction, verbose=False
+                    openmax, val_features, val_logits, val_labels, threshold=threshold, fraction=fraction, verbose=False
                 )
+                
                 
                 if overall_acc > best_params['accuracy']:
                     best_params.update({
                         'alpha': alpha,
                         'tailsize': tailsize,
                         'threshold': threshold,
+                        'threshold': threshold,
                         'accuracy': overall_acc,
                         'model': openmax
                     })
-                    print(f"\nNew best OpenMax parameters found:")
-                    print(f"Alpha: {alpha}")
-                    print(f"Tailsize: {tailsize}")
-                    print(f"Threshold: {threshold}")
-                    print(f"Overall Accuracy: {overall_acc:.2f}%")
-                    print(f"Known Classes Accuracy: {known_acc:.2f}%")
-                    print(f"Unknown Class Accuracy: {unknown_acc:.2f}%")
+                    if overall_acc > 90.0:
+                        print(f"\nNew best OpenMax parameters found:")
+                        print(f"Alpha: {alpha}")
+                        print(f"Tailsize: {tailsize}")
+                        print(f"Threshold: {threshold}")
+                        print(f"Overall Accuracy: {overall_acc:.2f}%")
+                        print(f"Known Classes Accuracy: {known_acc:.2f}%")
+                        print(f"Unknown Class Accuracy: {unknown_acc:.2f}%")
                     
                 elif overall_acc > 95.0:
 

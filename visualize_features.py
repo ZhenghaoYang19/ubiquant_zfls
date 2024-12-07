@@ -6,7 +6,7 @@ import umap
 import os
 from post_train import collect_features, prepare_data_and_model
 
-def visualize_features(features, labels, method='tsne', save_path=None, include_unknown=False):
+def visualize_features(features, labels, method='tsne', save_path=None, include_unknown=False, reducer=None):
     """
     可视化特征分布
     
@@ -16,6 +16,7 @@ def visualize_features(features, labels, method='tsne', save_path=None, include_
         method: str, 'tsne' 或 'umap'
         save_path: str, 保存路径，如果为None则显示图像
         include_unknown: bool, 是否包含未知类（第21类）
+        reducer: object, 预训练好的降维模型，如果为None则重新训练
     """
     # 转换为numpy数组
     features = features.cpu().numpy()
@@ -23,12 +24,16 @@ def visualize_features(features, labels, method='tsne', save_path=None, include_
     
     # 降维
     print(f"Performing {method.upper()} dimensionality reduction...")
-    if method.lower() == 'tsne':
-        reducer = TSNE(n_components=2, random_state=42)
-        embedded = reducer.fit_transform(features)
-    else:  # umap
-        reducer = umap.UMAP(n_components=2, random_state=42)
-        embedded = reducer.fit_transform(features)
+    if reducer is None:
+        if method.lower() == 'tsne':
+            reducer = TSNE(n_components=2, random_state=42)
+            embedded = reducer.fit_transform(features)
+        else:  # umap
+            reducer = umap.UMAP(n_components=2, random_state=42)
+            embedded = reducer.fit_transform(features)
+    else:
+        # 使用预训练的模型进行转换
+        embedded = reducer.transform(features)
     
     # 清理之前的图像状态并创建新图形
     plt.close('all')  # 关闭所有图形
@@ -93,6 +98,8 @@ def visualize_features(features, labels, method='tsne', save_path=None, include_
     
     plt.show()
     plt.close()
+    
+    return reducer  # 返回训练好的降维模型
 
 
 if __name__ == "__main__":
@@ -100,7 +107,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/resnet50_99.92.pth', model_type='resnet50', batch_size=128)
+    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/resnet50_12.500.pth', model_type='resnet50', batch_size=128)
     
     ## 加载特征
     print("Collecting features of training set...")
@@ -116,21 +123,13 @@ if __name__ == "__main__":
         loader=val_loader,
         device=device
     )
-    # 可视化特征
-    # print("Visualizing features using t-SNE...")
-    # visualize_features(
-    #     features=features,
-    #     labels=labels,
-    #     method='tsne',
-    #     save_path='outputs/tsne_features.png'
-    # )
     
     print("Visualizing features using UMAP...")
-    visualize_features(
+    umap_reducer = visualize_features(
         features=features,
         labels=labels,
         method='umap',
-        save_path='outputs/resnet50_train_FeatureMap.png',
+        save_path='outputs/resnet50_12.500_train_FeatureMap.png',
         include_unknown=False
     )
     
@@ -138,6 +137,15 @@ if __name__ == "__main__":
         features=val_features,
         labels=val_labels,
         method='umap',
-        save_path='outputs/resnet50_val_FeatureMap.png',
-        include_unknown=True
+        save_path='outputs/resnet50_12.500_val_FeatureMap.png',
+        include_unknown=True,
+        reducer=umap_reducer  # 使用训练集训练好的UMAP模型
+    )
+    
+    visualize_features(
+        features=val_features,
+        labels=val_labels,
+        method='umap',
+        save_path='outputs/resnet50_12.500_val_FeatureMap_01.png',
+        include_unknown=True,
     )

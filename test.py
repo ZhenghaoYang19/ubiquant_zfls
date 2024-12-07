@@ -2,11 +2,9 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from models.resnet import resnet18, resnet50
-from models.openmax import OpenMax
-from models.metamax import MetaMax
 from train import GameDataset
 from utils.data_stats import load_dataset_stats
-from utils.eval_utils import evaluate_known_classes, evaluate_openmax, evaluate_metamax
+from utils.eval_utils import evaluate_known_classes, evaluate_openmax
 from post_train import collect_features
 from pprint import pprint
 
@@ -36,12 +34,11 @@ def test_models(model_type=None, model_path=None, openmax_path=None, data_path=N
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
     model.eval()
-    
+
     # 加载OpenMax和MetaMax模型
     try:
         openmax = torch.load(openmax_path)
-        # metamax = torch.load('models/best_metamax.pth')
-        print("Successfully loaded OpenMax and MetaMax models")
+        print("Successfully loaded OpenMax model")
     except Exception as e:
         print(f"Error loading models: {e}")
         return
