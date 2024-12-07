@@ -50,22 +50,23 @@ def evaluate_known_classes(model, data_loader, criterion, device):
     
     return avg_loss, accuracy, errors
 
-def evaluate_openmax(openmax, features, logits, labels, multiplier, fraction=0.2, verbose=False):
+def evaluate_openmax(openmax, features, logits, labels, threshold=0.5, fraction=None, verbose=False):
     """评估OpenMax模型性能
     Args:
         openmax: OpenMax模型实例
         features: torch.Tensor, 预计算的特征 (N, feature_dim)
         logits: torch.Tensor, 预计算的logits (N, num_classes)
         labels: torch.Tensor, 标签 (N,)
-        multiplier: float, Weibull分数调整系数
-        fraction: float, 未知类别比例
+        threshold: float, 未知类别判断阈值
+        fraction: float, 未知类别权重
         verbose: bool, 是否打印详细信息
     Returns:
         overall_acc, known_acc, unknown_acc: 总体/已知类/未知类准确率
     """
-    # 一次性进行OpenMax预测
-    openmax_probs = openmax.predict(features, logits, multiplier=multiplier)
-    predictions = torch.argmax(openmax_probs, dim=1)
+    # 使用OpenMax进行预测
+    openmax_probs = openmax.predict(features, logits)
+    max_probs, predictions = torch.max(openmax_probs[:, :-1], dim=1)
+    predictions[max_probs < threshold] = 20
     
     # 分别计算已知类和未知类的准确率
     known_mask = labels < 20
@@ -78,14 +79,16 @@ def evaluate_openmax(openmax, features, logits, labels, multiplier, fraction=0.2
     unknown_total = unknown_mask.sum().item()
     
     # 计算准确率
-    # overall_acc = 100. * correct / total if total > 0 else 0
     known_acc = 100. * known_correct / known_total if known_total > 0 else 0
     unknown_acc = 100. * unknown_correct / unknown_total if unknown_total > 0 else 0
-    overall_acc = known_acc * (1 - fraction) + unknown_acc * fraction
+    if fraction:
+        overall_acc = known_acc * (1 - fraction) + unknown_acc * fraction
+    else:
+        overall_acc = 100. * (known_correct + unknown_correct) / (known_total + unknown_total)
     
     if verbose:
         print(f"\n=== OpenMax Evaluation Results ===")
-        print(f"Multiplier: {multiplier}")
+        print(f"Threshold: {threshold}")
         print(f"Fraction: {fraction}")
         print(f"Overall Accuracy: {overall_acc:.2f}%")
         print(f"Known Classes Accuracy: {known_acc:.2f}%")
