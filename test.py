@@ -2,15 +2,13 @@ import torch
 from torch.utils.data import DataLoader
 from torchvision import transforms
 from models.resnet import resnet18
-from models.openmax import OpenMax
-from models.metamax import MetaMax
 from train import GameDataset
 from utils.data_stats import load_dataset_stats
-from utils.eval_utils import evaluate_known_classes, evaluate_openmax, evaluate_metamax
-import os
+from utils.eval_utils import evaluate_known_classes, evaluate_openmax
+from post_train import collect_features
 from pprint import pprint
 
-def test_models():
+def test_models(model_type=None, model_path=None, openmax_path=None, threshold=0.05, fraction=0.2):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # 加载数据集统计信息
@@ -26,14 +24,14 @@ def test_models():
     
     # 加载基础模型
     model = resnet18(num_classes=20)
-    checkpoint = torch.load('models/best_model_99.92_02.pth')
+    checkpoint = torch.load(model_path)
     model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
     model.eval()
-    
+    features, logits, labels = collect_features(model, test_loader, device, return_logits=True)
     # 加载OpenMax和MetaMax模型
     try:
-        openmax = torch.load('models/best_openmax_94.71_01.pth')
+        openmax = torch.load(openmax_path)
         # metamax = torch.load('models/best_metamax.pth')
         print("Successfully loaded OpenMax and MetaMax models")
     except Exception as e:
@@ -50,11 +48,12 @@ def test_models():
     
     # 测试ResNet + OpenMax
     print("\n=== Testing ResNet + OpenMax ===")
-    evaluate_openmax(openmax, model, test_loader, device, multiplier=0.5, fraction=0.2, verbose=True)
+
+    evaluate_openmax(openmax, features, logits, labels, threshold=threshold, fraction=fraction, verbose=True)
     
     # 测试ResNet + MetaMax
     # print("\n=== Testing ResNet + MetaMax ===")
     # evaluate_metamax(metamax, model, test_loader, device, threshold=0.5, verbose=True)
 
 if __name__ == '__main__':
-    test_models()
+    test_models(model_type='resnet18', model_path='models/best_model_99.92_02.pth', openmax_path='models/best_openmax_95.62_02.pth', threshold=0.05, fraction=None)

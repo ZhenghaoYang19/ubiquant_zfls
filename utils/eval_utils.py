@@ -16,8 +16,8 @@ def evaluate_known_classes(model, data_loader, criterion, device):
             if not mask.any():
                 continue
                 
-            images = images[mask].to(device)
-            labels = labels[mask].to(device)
+            images = images[mask].to(device, non_blocking=True)
+            labels = labels[mask].to(device, non_blocking=True)
             paths = np.array(paths)[mask]
             
             logits, features = model(images, return_features=True)
@@ -50,22 +50,26 @@ def evaluate_known_classes(model, data_loader, criterion, device):
     
     return avg_loss, accuracy, errors
 
-def evaluate_openmax(openmax, features, logits, labels, multiplier, fraction=0.2, verbose=False):
+def evaluate_openmax(openmax, features, logits, labels, threshold=0.05, fraction=None, verbose=False):
     """评估OpenMax模型性能
     Args:
         openmax: OpenMax模型实例
         features: torch.Tensor, 预计算的特征 (N, feature_dim)
         logits: torch.Tensor, 预计算的logits (N, num_classes)
         labels: torch.Tensor, 标签 (N,)
-        multiplier: float, Weibull分数调整系数
+        threshold: float, 未知类别判断阈值
         fraction: float, 未知类别比例
         verbose: bool, 是否打印详细信息
     Returns:
         overall_acc, known_acc, unknown_acc: 总体/已知类/未知类准确率
     """
-    # 一次性进行OpenMax预测
-    openmax_probs = openmax.predict(features, logits, multiplier=multiplier)
+    # 使用OpenMax进行预测
+    openmax_probs = openmax.predict(features, logits)
+    # 将已知类概率小于阈值的样本标记为未知类别
+    max_known_probs, _ = torch.max(openmax_probs[:, :-1], dim=1)
+    mask = max_known_probs < threshold
     predictions = torch.argmax(openmax_probs, dim=1)
+    predictions[mask] = 20  # 将这些样本标记为未知类别
     
     # 分别计算已知类和未知类的准确率
     known_mask = labels < 20
@@ -78,14 +82,16 @@ def evaluate_openmax(openmax, features, logits, labels, multiplier, fraction=0.2
     unknown_total = unknown_mask.sum().item()
     
     # 计算准确率
-    # overall_acc = 100. * correct / total if total > 0 else 0
     known_acc = 100. * known_correct / known_total if known_total > 0 else 0
     unknown_acc = 100. * unknown_correct / unknown_total if unknown_total > 0 else 0
-    overall_acc = known_acc * (1 - fraction) + unknown_acc * fraction
+    if fraction:
+        overall_acc = known_acc * (1 - fraction) + unknown_acc * fraction
+    else:
+        overall_acc = 100. * (known_correct + unknown_correct) / (known_total + unknown_total)
     
     if verbose:
         print(f"\n=== OpenMax Evaluation Results ===")
-        print(f"Multiplier: {multiplier}")
+        print(f"Threshold: {threshold}")
         print(f"Fraction: {fraction}")
         print(f"Overall Accuracy: {overall_acc:.2f}%")
         print(f"Known Classes Accuracy: {known_acc:.2f}%")
@@ -117,8 +123,8 @@ def evaluate_metamax(metamax, model, val_loader, device, threshold=0.08, verbose
     
     with torch.no_grad():
         for images, labels, paths in val_loader:
-            images = images.to(device)
-            labels = labels.to(device)
+            images = images.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
             
             # 获取features和logits
             logits, features = model(images, return_features=True)

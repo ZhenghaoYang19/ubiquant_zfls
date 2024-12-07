@@ -75,16 +75,16 @@ def train_openmax(features,labels, model, val_loader, device, fraction=0.2):
     alpha_range = [12, 13, 14, 15, 16, 17, 18, 19, 20]
     # tailsize_range = [10, 15, 20, 25, 30]
     tailsize_range = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-    # multiplier_range = [0.5, 0.75, 1, 1.25, 1.5]
-    multiplier_range = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
+    threshold_range = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5]
     
     best_params = {
         'alpha': None,
         'tailsize': None,
-        'multiplier': None,
+        'threshold': None,
         'accuracy': .0,
         'model': None
     }
+    
     val_features, val_logits, val_labels = collect_features(model, val_loader, device, return_logits=True)
     print("\n=== Training OpenMax ===")
     for alpha in alpha_range:
@@ -93,32 +93,34 @@ def train_openmax(features,labels, model, val_loader, device, fraction=0.2):
             
             openmax = OpenMax(num_classes=20, tailsize=tailsize, alpha=alpha)
             openmax.fit(features, labels)
-            print(f"Training finished, evaluating...")
-            for multiplier in multiplier_range:
+            
+            for threshold in threshold_range:
                 overall_acc, known_acc, unknown_acc = evaluate_openmax(
-                    openmax, val_features, val_logits, val_labels, multiplier=multiplier, fraction=fraction, verbose=False
+                    openmax, val_features, val_logits, val_labels, threshold=threshold, fraction=fraction, verbose=False
                 )
+                
                 if overall_acc > best_params['accuracy']:
                     best_params.update({
                         'alpha': alpha,
                         'tailsize': tailsize,
-                        'multiplier': multiplier,
+                        'threshold': threshold,
                         'accuracy': overall_acc,
                         'model': openmax
                     })
-                    print(f"\nNew best OpenMax parameters found:")
-                    print(f"Alpha: {alpha}")
-                    print(f"Tailsize: {tailsize}")
-                    print(f"Multiplier: {multiplier}")
-                    print(f"Overall Accuracy: {overall_acc:.2f}%")
-                    print(f"Known Classes Accuracy: {known_acc:.2f}%")
-                    print(f"Unknown Class Accuracy: {unknown_acc:.2f}%")
+                    if overall_acc > 90.0:
+                        print(f"\nNew best OpenMax parameters found:")
+                        print(f"Alpha: {alpha}")
+                        print(f"Tailsize: {tailsize}")
+                        print(f"Threshold: {threshold}")
+                        print(f"Overall Accuracy: {overall_acc:.2f}%")
+                        print(f"Known Classes Accuracy: {known_acc:.2f}%")
+                        print(f"Unknown Class Accuracy: {unknown_acc:.2f}%")
                     
                 elif overall_acc > 95.0:
 
                     print(f"Alpha: {alpha}")
                     print(f"Tailsize: {tailsize}")
-                    print(f"Multiplier: {multiplier}")
+                    print(f"Threshold: {threshold}")
                     print(f"Overall Accuracy: {overall_acc:.2f}%")
                     print(f"Known Classes Accuracy: {known_acc:.2f}%")
                     print(f"Unknown Class Accuracy: {unknown_acc:.2f}%")

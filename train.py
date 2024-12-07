@@ -13,7 +13,8 @@ from models.openmax import OpenMax
 from utils.data_stats import calculate_dataset_stats, load_dataset_stats
 from utils.eval_utils import evaluate_known_classes, evaluate_openmax, evaluate_metamax
 from pprint import pprint
-import math
+from pytorch_metric_learning import miners, losses
+import torch.nn.functional as F
 
 
 class GameDataset(Dataset):
@@ -67,8 +68,17 @@ class GameDataset(Dataset):
 
 
 
-def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate = 0.3, patience = 10, model_type='resnet34'):
+def train(num_epochs = 20, batch_size = 256, learning_rate = 1e-4, dropout_rate = 0.3, patience = 10, lambda_triplet = 0.1, model_type='resnet34'):
     from post_train import collect_features
+    '''
+    Args:
+        num_epochs: 训练轮数
+        batch_size: 批次大小
+        learning_rate: 学习率
+        dropout_rate: dropout率
+        patience: 早停
+        lambda_triplet: triplet loss的权重
+        '''
     os.makedirs('models', exist_ok=True)
     os.makedirs('wandb_logs', exist_ok=True)
     images_path = os.path.join('jk_zfls', 'round0_train')
@@ -79,6 +89,7 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     except FileNotFoundError:
         print("FileNotFound, Calculating dataset statistics...")
         mean, std = calculate_dataset_stats(images_path)
+        print(f"Dataset statistics calculated: Mean = {mean}, Std = {std}")
         
     wandb.init(
         project="jk_zfls",
@@ -101,12 +112,12 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     # 增加数据增强
     transform = transforms.Compose([
         transforms.ToTensor(),
-        transforms.RandomAffine(
-            degrees=15,
-            translate=(0.1, 0.1),
-            scale=(0.9, 1.1),
-            fill=fill_value  # 使用数据集的均值作为填充值
-        ),
+        # transforms.RandomAffine(
+        #     degrees=15,
+        #     translate=(0.1, 0.1),
+        #     scale=(0.9, 1.1),
+        #     fill=fill_value  # 使用数据集的均值作为填充值
+        # ),
         transforms.Normalize(mean=mean, std=std)
     ])
     
@@ -120,7 +131,15 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     train_dataset = GameDataset('jk_zfls/round0_train', num_labels=20, transform=transform)
     val_dataset = GameDataset('jk_zfls/round0_eval', num_labels=21, transform=val_transform)
     
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=batch_size, 
+        shuffle=True,
+        num_workers=8,  # 增加到8-16，具体取决于CPU核心数
+        pin_memory=True,
+        persistent_workers=True,  # 保持worker进程存活
+        prefetch_factor=2  # 预加载2个batch的数据
+    )
     val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=4, pin_memory=True)
     
     # 根据选择加载不同的模型
@@ -140,7 +159,7 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     
     # 定义损失函数和优化器，使用更小的学习率
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate * 0.1, weight_decay=1e-3)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-3)
     
     # optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
@@ -173,30 +192,74 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
         'loss': None,
         'best_val_acc': 0
     }
+    
     for epoch in range(num_epochs):
-        # 训练阶段
         model.train()
         total_loss = 0
+        total_cls_loss = 0
+        total_trip_loss = 0
         
+        # 添加Triplet Loss和矿工
+        epsilon = max(0.05, 0.2 - epoch * 0.005)  # 随着训练逐渐降低epsilon
+        margin = min(0.6, 0.2 + epoch * 0.005)    # 随着训练逐渐增加margin
+        triplet_loss = losses.TripletMarginLoss(margin=margin)
+        miner = miners.MultiSimilarityMiner(
+            epsilon=epsilon
+        )
+        
+        print(f'Epoch {epoch}: epsilon = {epsilon:.3f}, margin = {margin:.3f}')
+        
+        # 使用预加载机制
         for batch_idx, (images, labels, paths) in enumerate(train_loader):
-            images, labels = images.to(device), labels.to(device)
+            # 在当前batch计算时预加载下一个batch
+            if batch_idx + 1 < len(train_loader):
+                torch.cuda.current_stream().wait_stream(torch.cuda.Stream())
+                with torch.cuda.stream(torch.cuda.Stream()):
+                    next_images, next_labels, _ = next(iter(train_loader))
+                    next_images = next_images.to(device, non_blocking=True)
+                    next_labels = next_labels.to(device, non_blocking=True)
+            
+            # 使用non_blocking=True进行异步传输
+            images = images.to(device, non_blocking=True)
+            labels = labels.to(device, non_blocking=True)
             
             optimizer.zero_grad()
-            logits = model(images)
-            loss = criterion(logits, labels)
+            
+            # 获取特征和logits
+            features, logits = model(images, return_features=True)
+            
+            # 在计算triplet loss前将特征归一化
+            # features = F.normalize(features, p=2, dim=1)
+            
+            # 计算分类损失
+            cls_loss = criterion(logits, labels)
+            
+            # 计算triplet loss
+            hard_pairs = miner(features, labels)
+            trip_loss = triplet_loss(features, labels, hard_pairs)
+            
+            # 组合损失
+            loss = cls_loss + lambda_triplet * trip_loss
+            
             loss.backward()
             optimizer.step()
             
+            # 累加所有损失
             total_loss += loss.item()
+            total_cls_loss += cls_loss.item()
+            total_trip_loss += trip_loss.item()
             
-            if batch_idx % 10 == 0:
-                print(f'Epoch: {epoch}, Batch: {batch_idx}, Loss: {loss.item():.4f}')
+            # if batch_idx % 10 == 0:
+            #     print(f'Epoch: {epoch}, Batch: {batch_idx}, Loss: {loss.item():.4f}, Triplet Loss: {trip_loss.item():.4f}')
             
             # 在warmup阶段更新学习率
             if epoch * len(train_loader) + batch_idx < num_warmup_steps:
                 warmup_scheduler.step()
         
+        # 计算平均损失
         train_loss = total_loss / len(train_loader)
+        avg_cls_loss = total_cls_loss / len(train_loader)
+        avg_trip_loss = total_trip_loss / len(train_loader)
         
         # 验证阶段（只验证已知类别）
         val_loss, val_acc, val_errors = evaluate_known_classes(model, val_loader, criterion, device)
@@ -205,12 +268,13 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
         wandb.log({
             'epoch': epoch,
             'train_loss': train_loss,
+            'cls_loss': avg_cls_loss,
+            'triplet_loss': avg_trip_loss,
             'val_loss': val_loss,
-            'val_accuracy': val_acc
+            'val_accuracy': val_acc,
         })
         
-        print(f'Epoch {epoch}:')
-        print(f'Train Loss = {train_loss:.4f}, Val Loss = {val_loss:.4f}, Val Accuracy = {val_acc:.2f}%')
+        print(f'Train Loss = {train_loss:.4f}, Cls Loss = {avg_cls_loss:.4f}, Triplet Loss = {avg_trip_loss:.4f}, Val Accuracy = {val_acc:.2f}%')
         
         # 验证阶段后更新ReduceLROnPlateau
         reduce_scheduler.step(val_acc)
@@ -268,10 +332,10 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     print("Evaluating OpenMax and MetaMax...")
     val_features, val_logits, val_labels = collect_features(model, val_loader, device, return_logits=True)
 
-    overall_acc, known_acc, unknown_acc = evaluate_openmax(openmax, val_features, val_logits, val_labels, multiplier=0.5)
-    print(f"Multiplier: 0.5, Overall Accuracy: {overall_acc:.2f}%")
+    overall_acc, known_acc, unknown_acc = evaluate_openmax(openmax, val_features, val_logits, val_labels, threshold=0.05, fraction=None)
+    print(f"Overall Accuracy: {overall_acc:.2f}%, Known Accuracy: {known_acc:.2f}%, Unknown Accuracy: {unknown_acc:.2f}%")
     # evaluate_metamax(metamax, val_features, val_labels, device)
     wandb.finish()
 
 if __name__ == '__main__':
-    train(num_epochs=100, batch_size=64, learning_rate=0.001, dropout_rate=0.3, patience=20, model_type='resnet50')
+    train(num_epochs=100, batch_size=128, learning_rate=1e-5, dropout_rate=0.3, patience=20, lambda_triplet=0.0, model_type='resnet18')
