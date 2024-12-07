@@ -107,7 +107,7 @@ if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     
-    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/best_model_99.92_02.pth', model_type='resnet18', batch_size=128)
+    model, train_loader, val_loader, device = prepare_data_and_model(model_path='models/resnet50_12.500.pth', model_type='resnet50', batch_size=128)
     
     ## 加载特征
     print("Collecting features of training set...")
@@ -129,7 +129,7 @@ if __name__ == "__main__":
         features=features,
         labels=labels,
         method='umap',
-        save_path='outputs/resnet18_train_FeatureMap.png',
+        save_path='outputs/resnet50_12.500_train_FeatureMap.png',
         include_unknown=False
     )
     
@@ -137,7 +137,7 @@ if __name__ == "__main__":
         features=val_features,
         labels=val_labels,
         method='umap',
-        save_path='outputs/resnet18_val_FeatureMap.png',
+        save_path='outputs/resnet50_12.500_val_FeatureMap.png',
         include_unknown=True,
         reducer=umap_reducer  # 使用训练集训练好的UMAP模型
     )
@@ -145,7 +145,7 @@ if __name__ == "__main__":
     visualize_features(
         features=val_features,
         labels=val_labels,
-        method='tsne',
-        save_path='outputs/resnet18_val_FeatureMap_01.png',
+        method='umap',
+        save_path='outputs/resnet50_12.500_val_FeatureMap_01.png',
         include_unknown=True,
     )

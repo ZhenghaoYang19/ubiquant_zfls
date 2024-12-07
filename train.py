@@ -68,7 +68,7 @@ class GameDataset(Dataset):
 
 
 
-def train(num_epochs = 20, batch_size = 256, learning_rate = 1e-4, dropout_rate = 0.3, patience = 10, lambda_triplet = 0.1, model_type='resnet34'):
+def train(num_epochs = 20, batch_size = 256, learning_rate = 1e-4, dropout_rate = 0.3, patience = 10, lambda_triplet = 0.1, model_type='resnet34', model_path=None):
     from post_train import collect_features
     '''
     Args:
@@ -152,11 +152,12 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 1e-4, dropout_rate 
     else:
         raise ValueError(f"Unsupported model type: {model_type}")
         
-    # 加载模型（和已有参数）
-    # checkpoint = torch.load('models/best_model_99.75.pth')
-    # model.load_state_dict(checkpoint['model_state_dict'])
+    if model_path:
+        checkpoint = torch.load(model_path)
+        model.load_state_dict(checkpoint['model_state_dict'])
     model = model.to(device)
-    
+
+        
     # 定义损失函数和优化器，使用更小的学习率
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-3)
@@ -165,7 +166,7 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 1e-4, dropout_rate 
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
     # 使用带 warmup 的 cosine 调度器
     num_training_steps = len(train_loader) * num_epochs
-    num_warmup_steps = len(train_loader) * 5      # 5个epoch的warmup
+    num_warmup_steps = len(train_loader) * 3      # 3个epoch的warmup
     
     # 定义warmup调度器和ReduceLROnPlateau调度器
     warmup_scheduler = optim.lr_scheduler.LinearLR(
@@ -179,7 +180,7 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 1e-4, dropout_rate 
         optimizer,
         mode='max',
         factor=0.5,
-        patience=5,
+        patience=3,
         verbose=True,
         min_lr=1e-6
     )
@@ -200,8 +201,8 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 1e-4, dropout_rate 
         total_trip_loss = 0
         
         # 添加Triplet Loss和矿工
-        epsilon = max(0.05, 0.2 - epoch * 0.005)  # 随着训练逐渐降低epsilon
-        margin = min(0.6, 0.2 + epoch * 0.005)    # 随着训练逐渐增加margin
+        epsilon = max(0.05, 0.5 - epoch * 0.005)  # 随着训练逐渐降低epsilon
+        margin = min(0.6, 0.05 + epoch * 0.005)    # 随着训练逐渐增加margin
         triplet_loss = losses.TripletMarginLoss(margin=margin)
         miner = miners.MultiSimilarityMiner(
             epsilon=epsilon
@@ -239,8 +240,8 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 1e-4, dropout_rate 
             trip_loss = triplet_loss(features, labels, hard_pairs)
             
             # 组合损失
-            loss = cls_loss + lambda_triplet * trip_loss
-            
+            # loss = cls_loss + lambda_triplet * trip_loss
+            loss = cls_loss
             loss.backward()
             optimizer.step()
             
@@ -309,8 +310,8 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 1e-4, dropout_rate 
     
     # 训练完成后，保存最佳模型的参数
     print("Saving best model parameters...")
-    torch.save(best_params, f'models/{model_type}_{best_params["best_val_acc"]:.2f}.pth')
-    
+    torch.save(best_params, f'models/{model_type}_{best_params["best_val_acc"]:.3f}.pth')
+    print(f"Best model saved to models/{model_type}_{best_params['best_val_acc']:.3f}.pth")
     # 使用最佳模型收集features
     print("Collecting features from best model for OpenMax/MetaMax training...")
     model.load_state_dict(best_params['model_state_dict'])
@@ -338,4 +339,4 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 1e-4, dropout_rate 
     wandb.finish()
 
 if __name__ == '__main__':
-    train(num_epochs=100, batch_size=128, learning_rate=1e-5, dropout_rate=0.3, patience=20, lambda_triplet=0.0, model_type='resnet18')
+    train(num_epochs=100, batch_size=128, learning_rate=1e-4, dropout_rate=0.3, patience=20, lambda_triplet=0.00, model_type='resnet50', model_path='models/resnet50_99.92.pth')
