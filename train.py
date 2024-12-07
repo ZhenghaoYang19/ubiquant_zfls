@@ -140,13 +140,13 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     
     # 定义损失函数和优化器，使用更小的学习率
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=learning_rate * 0.1, weight_decay=1e-3)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-3)
     
     # optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=1e-4)
     # scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10)
     # 使用带 warmup 的 cosine 调度器
     num_training_steps = len(train_loader) * num_epochs
-    num_warmup_steps = len(train_loader) * 5      # 5个epoch的warmup
+    num_warmup_steps = len(train_loader) * 2      # 2个epoch的warmup
     
     # 定义warmup调度器和ReduceLROnPlateau调度器
     warmup_scheduler = optim.lr_scheduler.LinearLR(
@@ -220,7 +220,7 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
         print(f'Current learning rate: {current_lr:.2e}')
         
         # 记录最佳模型（基于验证集准确率）
-        if val_acc > best_params['best_val_acc']:
+        if val_acc >= best_params['best_val_acc']:
             patience_counter = 0  # 重置计数器
             best_params.update({
                 'epoch': epoch,
@@ -274,4 +274,4 @@ def train(num_epochs = 20, batch_size = 256, learning_rate = 0.001, dropout_rate
     wandb.finish()
 
 if __name__ == '__main__':
-    train(num_epochs=100, batch_size=64, learning_rate=0.001, dropout_rate=0.3, patience=20, model_type='resnet50')
+    train(num_epochs=100, batch_size=64, learning_rate=1e-4, dropout_rate=0.3, patience=20, model_type='resnet50')

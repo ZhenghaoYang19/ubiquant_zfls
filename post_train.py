@@ -71,10 +71,10 @@ def train_openmax(features,labels, model, val_loader, device, fraction=0.2):
     fraction: 未知类别比例
     """
     # OpenMax特定的超参数搜索空间
-    # alpha_range = [3, 5, 8, 12, 16, 20]
-    alpha_range = [12, 13, 14, 15, 16, 17, 18, 19, 20]
-    # tailsize_range = [10, 15, 20, 25, 30]
-    tailsize_range = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    alpha_range = [3, 5, 8, 12, 16, 20]
+    # alpha_range = [12, 13, 14, 15, 16, 17, 18, 19, 20]
+    tailsize_range = [5, 10, 15, 20, 25, 30]
+    # tailsize_range = [5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
     # multiplier_range = [0.5, 0.75, 1, 1.25, 1.5]
     multiplier_range = [0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
     
