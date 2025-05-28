@@ -148,8 +148,8 @@ if __name__ == '__main__':
     
     # 初赛的第1阶段，game_data_id  must be in ['00000', '00001', ..., '00099']
     # 初赛的终榜阶段，game_data_id  must be in ['00000', '00001', ..., '00199']
-    test_list = [8]
-    game_data_id = [f'{i:05}' for i in test_list]
+
+    game_data_id = [f'{i:05}' for i in range(1, 2, 1)]
     st = time.time()
     for gdi in game_data_id:
         team_play_game(team_id, game_type, gdi, ip, port)
